@@ -1,0 +1,17 @@
+[run]
+branch = True
+source =
+    pico_agent
+omit =
+    */_version.py
+
+[paths]
+pico_agent =
+    src/pico_agent
+    .tox/*/lib/*/site-packages/pico_agent
+    .tox/*/site-packages/pico_agent
+    */site-packages/pico_agent
+
+[report]
+show_missing = True
+
