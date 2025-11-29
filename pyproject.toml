@@ -1,0 +1,75 @@
+[build-system]
+requires = ["setuptools>=69.0", "wheel", "setuptools-scm>=8.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pico-agent"
+dynamic = ["version"]
+authors = [{ name = "David Perez Cabrera", email = "dperezcabrera@gmail.com" }]
+description = "A pico agent framework with LangChain integration."
+readme = { file = "pico.txt", content-type = "text/markdown" }
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+keywords = [
+    "ioc", 
+    "di", 
+    "dependency injection", 
+    "agent", 
+    "llm", 
+    "langchain",
+    "ai"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Framework :: AsyncIO",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent"
+]
+
+dependencies = [
+    "pico-ioc >= 2.2.0",
+    "pydantic>=2.0",
+    "langchain>=1.0.2",
+    "langchain-core",
+    "langchain-community",
+    "langchain-model-profiles",
+]
+
+[project.optional-dependencies]
+openai = ["langchain-openai"]
+google = ["langchain-google-genai"]
+anthropic = ["langchain-anthropic"]
+community = ["langchain-community"]
+all = [
+    "langchain-openai",
+    "langchain-google-genai",
+    "langchain-anthropic",
+    "langchain-community",
+]
+
+[project.urls]
+Homepage = "https://github.com/dperezcabrera/pico-agent"
+Repository = "https://github.com/dperezcabrera/pico-agent"
+"Issue Tracker" = "https://github.com/dperezcabrera/pico-agent/issues"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["pico_agent*"]
+
+[tool.setuptools_scm]
+version_scheme = "post-release"
+local_scheme = "no-local-version"
+fallback_version = "0.1.0"
+write_to = "src/pico_agent/_version.py"
+write_to_template = "__version__ = '{version}'\n"
+
+[project.entry-points."pico_stack.modules"]
+pico_agent = "pico_agent"
