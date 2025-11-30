@@ -1,13 +1,14 @@
 import inspect
 from typing import Any, List, Dict, Type, get_type_hints, Optional
 from pydantic import BaseModel
-from pico_ioc import component
+from pico_ioc import component, PicoContainer
 from .config import AgentConfig, AgentType
 from .registry import AgentConfigService, ToolRegistry
 from .interfaces import LLMFactory
 from .router import ModelRouter
 from .exceptions import AgentDisabledError
-from .tools import AgentAsTool
+from .tools import AgentAsTool, ToolWrapper
+from .decorators import TOOL_META_KEY
 
 @component
 class TracedAgentProxy:
@@ -37,8 +38,7 @@ class TracedAgentProxy:
         llm = self.llm_factory.create(
             model_name=final_model_name,
             temperature=config.temperature,
-            max_tokens=config.max_tokens,
-            llm_profile=config.llm_profile
+            max_tokens=config.max_tokens
         )
 
         resolved_tools = []
@@ -72,12 +72,13 @@ class DynamicAgentProxy:
     def __init__(
         self,
         agent_name: str,
-        protocol_cls: Type,
+        protocol_cls: Optional[Type],
         config_service: AgentConfigService,
         tool_registry: ToolRegistry,
         llm_factory: LLMFactory,
         model_router: ModelRouter,
-        agent_resolver: Any = None 
+        container: PicoContainer,
+        locator: Any = None 
     ):
         self.agent_name = agent_name
         self.protocol_cls = protocol_cls
@@ -85,11 +86,15 @@ class DynamicAgentProxy:
         self.tool_registry = tool_registry
         self.llm_factory = llm_factory
         self.model_router = model_router
-        self.agent_resolver = agent_resolver
+        self.container = container
+        self.locator = locator
 
     def __getattr__(self, name: str) -> Any:
         if name.startswith("_"):
              raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
+
+        if not self.protocol_cls:
+             raise AttributeError(f"Virtual Agent '{self.agent_name}' has no protocol definition.")
 
         if not hasattr(self.protocol_cls, name):
             raise AttributeError(f"Agent {self.agent_name} has no method {name}")
@@ -165,36 +170,45 @@ class DynamicAgentProxy:
         final_tools = []
         
         for tool_name in config.tools:
-            t = self.tool_registry.get_tool(tool_name)
-            if t:
-                final_tools.append(t)
+            tool_instance = None
+            
+            if self.container.has(tool_name):
+                tool_instance = self.container.get(tool_name)
+            
+            elif self.tool_registry.get_tool(tool_name):
+                tool_ref = self.tool_registry.get_tool(tool_name)
+                if isinstance(tool_ref, type):
+                    tool_instance = tool_ref()
+                else:
+                    tool_instance = tool_ref
+            
+            if tool_instance:
+                if hasattr(tool_instance, "args_schema") and hasattr(tool_instance, "name") and hasattr(tool_instance, "description"):
+                    final_tools.append(tool_instance)
+                elif hasattr(type(tool_instance), TOOL_META_KEY):
+                    tool_config = getattr(type(tool_instance), TOOL_META_KEY)
+                    final_tools.append(ToolWrapper(tool_instance, tool_config))
+                else:
+                    final_tools.append(tool_instance)
 
-        if self.agent_resolver:
+        if self.locator:
             for agent_name in config.agents:
                 try:
-                    child_agent = self.agent_resolver.get_agent(agent_name)
+                    child_agent = self.locator.get_agent(agent_name)
                     if child_agent:
                         child_config = self.config_service.get_config(agent_name)
-                        if not child_config.enabled:
-                            continue
+                        if not child_config.enabled: continue
                         
                         method_name = "invoke"
-                        protocol = child_agent.protocol_cls
-                        candidates = [
-                            n for n, m in inspect.getmembers(protocol)
-                            if not n.startswith("_") and (inspect.isfunction(m) or inspect.ismethod(m))
-                        ]
+                        if child_agent.protocol_cls:
+                            protocol = child_agent.protocol_cls
+                            candidates = [n for n, m in inspect.getmembers(protocol) if not n.startswith("_") and (inspect.isfunction(m) or inspect.ismethod(m))]
+                            if "invoke" in candidates:
+                                method_name = "invoke"
+                            elif candidates:
+                                method_name = candidates[0]
                         
-                        if "invoke" in candidates:
-                            method_name = "invoke"
-                        elif candidates:
-                            method_name = candidates[0]
-                        
-                        adapter = AgentAsTool(
-                            agent_proxy=child_agent, 
-                            method_name=method_name, 
-                            description=f"Delegates to agent: {agent_name}"
-                        )
+                        adapter = AgentAsTool(child_agent, method_name)
                         final_tools.append(adapter)
                 except Exception:
                     pass
@@ -215,14 +229,12 @@ class DynamicAgentProxy:
                 sys_content = config.system_prompt
             messages.append({"role": "system", "content": sys_content})
         
-        user_content = ""
+        user_content = " ".join(input_context.values())
         if config.user_prompt_template:
             try:
                 user_content = config.user_prompt_template.format(**input_context)
             except KeyError:
-                user_content = " ".join(input_context.values())
-        else:
-            user_content = " ".join(input_context.values())
+                pass
         
         messages.append({"role": "user", "content": user_content})
         return messages

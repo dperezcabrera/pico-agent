@@ -1,3 +1,4 @@
+import sys
 import pytest
 from typing import Protocol, List, Any, Dict, Optional
 from unittest.mock import MagicMock
@@ -6,6 +7,7 @@ from pico_agent import agent, AgentCapability, AgentType
 from pico_agent.registry import ToolRegistry
 from pico_agent.interfaces import LLMFactory, LLM
 from pico_agent.tools import AgentAsTool
+from pico_agent.locator import AgentLocator
 from pico_agent.scanner import AgentScanner
 
 @agent(
@@ -14,7 +16,8 @@ from pico_agent.scanner import AgentScanner
     system_prompt="Translate inputs.",
     user_prompt_template="{text}",
     agent_type=AgentType.ONE_SHOT,
-    temperature=1.0
+    temperature=1.0,
+    description="Delegates to agent: translator"
 )
 class TranslatorAgent(Protocol):
     def translate(self, text: str) -> str: ...
@@ -52,21 +55,23 @@ def test_full_stack_integration():
 
     mock_factory = MagicMock(spec=LLMFactory)
     mock_factory.create.return_value = mock_llm
-    
     mock_factory.return_value = mock_factory
 
     container = init(
         modules=["pico_agent", __name__],
         overrides={
             LLMFactory: mock_factory
-        },
-        custom_scanners=[AgentScanner()]
+        }
     )
+
+    container.get(AgentScanner).scan_module(sys.modules[__name__])
 
     registry = container.get(ToolRegistry)
     registry.register("calculator", CalculatorTool())
 
-    translator = container.get(TranslatorAgent)
+    agent_locator = container.get(AgentLocator)
+
+    translator = agent_locator.get_agent(TranslatorAgent)
     result = translator.translate(text="Hello")
 
     assert result == "LLM Output"
@@ -78,7 +83,7 @@ def test_full_stack_integration():
         llm_profile=None
     )
 
-    researcher = container.get(ResearcherAgent)
+    researcher = agent_locator.get_agent("researcher")
     result_loop = researcher.research(topic="Quantum")
 
     assert result_loop == "Loop Output"
@@ -91,7 +96,7 @@ def test_full_stack_integration():
     assert len(tools_passed) == 1
     assert isinstance(tools_passed[0], CalculatorTool)
 
-    orchestrator = container.get(OrchestratorAgent)
+    orchestrator = agent_locator.get_agent(OrchestratorAgent)
     orchestrator.work(task="Analyze and Translate")
 
     invoke_call = mock_llm.invoke.call_args
