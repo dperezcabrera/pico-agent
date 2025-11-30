@@ -4,8 +4,10 @@ from .interfaces import CentralConfigClient, LLMFactory
 from .config import AgentConfig, LLMConfig
 from .registry import AgentConfigService, ToolRegistry, LocalAgentRegistry
 from .proxy import DynamicAgentProxy
+from .virtual import VirtualAgentRunner
 from .router import ModelRouter
 from .providers import LangChainLLMFactory
+from .experiments import ExperimentRegistry
 
 class NoOpCentralClient(CentralConfigClient):
     def get_agent_config(self, name: str) -> Optional[AgentConfig]: return None
@@ -37,7 +39,8 @@ class AgentLocator:
         tool_registry: ToolRegistry,
         llm_factory: LLMFactory,
         local_registry: LocalAgentRegistry,
-        model_router: ModelRouter
+        model_router: ModelRouter,
+        experiment_registry: ExperimentRegistry
     ):
         self.container = container
         self.config_service = config_service
@@ -45,6 +48,7 @@ class AgentLocator:
         self.llm_factory = llm_factory
         self.local_registry = local_registry
         self.model_router = model_router
+        self.experiment_registry = experiment_registry
 
     def get_agent(self, name_or_protocol: Any) -> Optional[Any]:
         agent_name = ""
@@ -61,13 +65,30 @@ class AgentLocator:
                         agent_name = n
                         break
         else:
-            agent_name = str(name_or_protocol)
+            requested_name = str(name_or_protocol)
+            agent_name = self.experiment_registry.resolve_variant(requested_name)
             protocol = self.local_registry.get_protocol(agent_name)
 
         if not agent_name:
              return None
 
-        return self._create_proxy(agent_name, protocol)
+        if protocol:
+            return self._create_proxy(agent_name, protocol)
+        
+        try:
+            config = self.config_service.get_config(agent_name)
+            if config:
+                return VirtualAgentRunner(
+                    config=config,
+                    tool_registry=self.tool_registry,
+                    llm_factory=self.llm_factory,
+                    model_router=self.model_router,
+                    container=self.container
+                )
+        except ValueError:
+            pass
+
+        return None
 
     def _create_proxy(self, name: str, protocol: Optional[Type]) -> Any:
         return DynamicAgentProxy(
