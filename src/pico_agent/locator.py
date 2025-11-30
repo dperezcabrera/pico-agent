@@ -1,5 +1,5 @@
-from typing import Optional, Any
-from pico_ioc import factory, provides, component
+from typing import Optional, Any, Type
+from pico_ioc import factory, provides, component, PicoContainer
 from .interfaces import CentralConfigClient, LLMFactory
 from .config import AgentConfig, LLMConfig
 from .registry import AgentConfigService, ToolRegistry, LocalAgentRegistry
@@ -25,41 +25,60 @@ class AgentInfrastructureFactory:
     def provide_llm_factory(self, config: LLMConfig) -> LLMFactory:
         return LangChainLLMFactory(config)
 
-@component
-class DynamicProxyFactory:
+@component(scope="singleton")
+class AgentLocator:
     def __init__(
         self,
+        container: PicoContainer,
         config_service: AgentConfigService,
         tool_registry: ToolRegistry,
         llm_factory: LLMFactory,
         local_registry: LocalAgentRegistry,
         model_router: ModelRouter
     ):
+        self.container = container
         self.config_service = config_service
         self.tool_registry = tool_registry
         self.llm_factory = llm_factory
         self.local_registry = local_registry
         self.model_router = model_router
 
-    def get_agent(self, name: str) -> Optional[Any]:
-        protocol = self.local_registry.get_protocol(name)
-        if protocol:
-            return self.create_proxy(protocol)
-        return None
+    def get_agent(self, name_or_protocol: Any) -> Optional[Any]:
+        agent_name = ""
+        protocol = None
 
-    def create_proxy(self, protocol: type) -> Any:
-        from .decorators import AGENT_META_KEY
-        config = getattr(protocol, AGENT_META_KEY)
-        
-        self.local_registry.register_default(config.name, config)
-        self.local_registry.register_protocol(config.name, protocol)
-        
+        if isinstance(name_or_protocol, type):
+            protocol = name_or_protocol
+            from .decorators import AGENT_META_KEY
+            if hasattr(protocol, AGENT_META_KEY):
+                agent_name = getattr(protocol, AGENT_META_KEY).name
+            else:
+                for n, p in self.local_registry._protocols.items():
+                    if p == protocol:
+                        agent_name = n
+                        break
+        else:
+            agent_name = str(name_or_protocol)
+            protocol = self.local_registry.get_protocol(agent_name)
+
+        if not agent_name:
+             return None
+
+        return self._create_proxy(agent_name, protocol)
+
+    def _create_proxy(self, name: str, protocol: Optional[Type]) -> Any:
         return DynamicAgentProxy(
-            agent_name=config.name,
+            agent_name=name,
             protocol_cls=protocol,
             config_service=self.config_service,
             tool_registry=self.tool_registry,
             llm_factory=self.llm_factory,
             model_router=self.model_router,
-            agent_resolver=self
+            container=self.container,
+            locator=self
         )
+    
+    def create_proxy(self, protocol: Type) -> Any:
+        from .decorators import AGENT_META_KEY
+        config = getattr(protocol, AGENT_META_KEY)
+        return self._create_proxy(config.name, protocol)

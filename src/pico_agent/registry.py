@@ -1,4 +1,5 @@
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Type
+from dataclasses import replace
 from pico_ioc import component
 from .config import AgentConfig
 from .interfaces import CentralConfigClient
@@ -9,8 +10,8 @@ class ToolRegistry:
         self._tools: Dict[str, Any] = {}
         self._tag_map: Dict[str, List[str]] = {}
 
-    def register(self, name: str, tool: Any, tags: List[str] = []) -> None:
-        self._tools[name] = tool
+    def register(self, name: str, tool_cls_or_instance: Any, tags: List[str] = []) -> None:
+        self._tools[name] = tool_cls_or_instance
         for tag in tags:
             if tag not in self._tag_map:
                 self._tag_map[tag] = []
@@ -18,6 +19,9 @@ class ToolRegistry:
 
     def get_tool(self, name: str) -> Optional[Any]:
         return self._tools.get(name)
+
+    def get_tool_names_by_tag(self, tag: str) -> List[str]:
+        return self._tag_map.get(tag, [])
 
     def get_dynamic_tools(self, agent_tags: List[str]) -> List[Any]:
         found_tools = []
@@ -38,19 +42,17 @@ class ToolRegistry:
 @component
 class LocalAgentRegistry:
     def __init__(self):
-        self._defaults: Dict[str, AgentConfig] = {}
-        self._protocols: Dict[str, type] = {}
+        self._configs: Dict[str, AgentConfig] = {}
+        self._protocols: Dict[str, Type] = {}
 
-    def register_default(self, name: str, config: AgentConfig) -> None:
-        self._defaults[name] = config
-
-    def register_protocol(self, name: str, protocol: type) -> None:
+    def register(self, name: str, protocol: Type, config: AgentConfig) -> None:
+        self._configs[name] = config
         self._protocols[name] = protocol
 
-    def get_default(self, name: str) -> Optional[AgentConfig]:
-        return self._defaults.get(name)
+    def get_config(self, name: str) -> Optional[AgentConfig]:
+        return self._configs.get(name)
 
-    def get_protocol(self, name: str) -> Optional[type]:
+    def get_protocol(self, name: str) -> Optional[Type]:
         return self._protocols.get(name)
 
 @component
@@ -59,19 +61,33 @@ class AgentConfigService:
         self.central_client = central_client
         self.local_registry = local_registry
         self.auto_register = True
+        self._runtime_overrides: Dict[str, Dict[str, Any]] = {}
 
     def get_config(self, name: str) -> AgentConfig:
         remote_config = self.central_client.get_agent_config(name)
-        if remote_config:
-            return remote_config
+        local_config = self.local_registry.get_config(name)
         
-        local_config = self.local_registry.get_default(name)
-        if not local_config:
-            raise ValueError(f"No configuration found for agent: {name}")
+        base_config = remote_config or local_config
+        runtime_data = self._runtime_overrides.get(name)
 
-        if self.auto_register:
-            try:
-                self.central_client.upsert_agent_config(local_config)
-            except Exception:
-                pass
-        return local_config
+        if base_config:
+            if runtime_data:
+                return replace(base_config, **runtime_data)
+            return base_config
+        
+        elif runtime_data:
+            config_data = runtime_data.copy()
+            if "name" not in config_data:
+                config_data["name"] = name
+            return AgentConfig(**config_data)
+
+        raise ValueError(f"No configuration found for agent: {name}")
+
+    def update_agent_config(self, name: str, **kwargs):
+        if name not in self._runtime_overrides:
+            self._runtime_overrides[name] = {}
+        self._runtime_overrides[name].update(kwargs)
+
+    def reset_agent_config(self, name: str):
+        if name in self._runtime_overrides:
+            del self._runtime_overrides[name]
