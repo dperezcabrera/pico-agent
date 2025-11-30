@@ -5,8 +5,10 @@ from .interfaces import LLM, LLMFactory
 from .config import LLMConfig
 
 class LangChainAdapter(LLM):
-    def __init__(self, chat_model: BaseChatModel):
+    def __init__(self, chat_model: BaseChatModel, tracer: Any = None, model_name: str = ""):
         self.model = chat_model
+        self.tracer = tracer
+        self.model_name = model_name
 
     def _convert_messages(self, messages: List[Dict[str, str]]) -> List[BaseMessage]:
         lc_messages = []
@@ -19,52 +21,64 @@ class LangChainAdapter(LLM):
                 lc_messages.append(AIMessage(content=msg["content"]))
         return lc_messages
 
+    def _trace(self, method_name, inputs, func):
+        run_id = None
+        if self.tracer:
+            run_id = self.tracer.start_run(
+                name=f"LLM: {self.model_name}",
+                run_type="llm",
+                inputs={"messages": inputs},
+                extra={"method": method_name}
+            )
+        try:
+            result = func()
+            if self.tracer and run_id:
+                self.tracer.end_run(run_id, outputs=str(result))
+            return result
+        except Exception as e:
+            if self.tracer and run_id:
+                self.tracer.end_run(run_id, error=e)
+            raise e
+
     def invoke(self, messages: List[Dict[str, str]], tools: List[Any]) -> str:
-        lc_messages = self._convert_messages(messages)
-        model_with_tools = self.model
-        
-        if tools:
-            model_with_tools = self.model.bind_tools(tools)
-        
-        response = model_with_tools.invoke(lc_messages)
-        return str(response.content)
+        def _exec():
+            lc_messages = self._convert_messages(messages)
+            model_with_tools = self.model
+            if tools:
+                model_with_tools = self.model.bind_tools(tools)
+            response = model_with_tools.invoke(lc_messages)
+            return str(response.content)
+            
+        return self._trace("invoke", messages, _exec)
 
-    def invoke_structured(
-        self, 
-        messages: List[Dict[str, str]], 
-        tools: List[Any], 
-        output_schema: Type[Any]
-    ) -> Any:
-        lc_messages = self._convert_messages(messages)
-        structured_model = self.model.with_structured_output(output_schema)
-        return structured_model.invoke(lc_messages)
+    def invoke_structured(self, messages: List[Dict[str, str]], tools: List[Any], output_schema: Type[Any]) -> Any:
+        def _exec():
+            lc_messages = self._convert_messages(messages)
+            structured_model = self.model.with_structured_output(output_schema)
+            return structured_model.invoke(lc_messages)
+            
+        return self._trace("invoke_structured", messages, _exec)
 
-    def invoke_agent_loop(
-        self, 
-        messages: List[Dict[str, str]], 
-        tools: List[Any], 
-        max_iterations: int, 
-        output_schema: Optional[Type[Any]] = None
-    ) -> Any:
-        from langgraph.prebuilt import create_react_agent
-        
-        lc_messages = self._convert_messages(messages)
-        agent_executor = create_react_agent(self.model, tools=tools)
-        
-        inputs = {"messages": lc_messages}
-        result = agent_executor.invoke(inputs, config={"recursion_limit": max_iterations})
-        
-        final_message = result["messages"][-1]
-        
-        if output_schema:
-             structured_model = self.model.with_structured_output(output_schema)
-             return structured_model.invoke([HumanMessage(content=str(final_message.content))])
-        
-        return str(final_message.content)
+    def invoke_agent_loop(self, messages: List[Dict[str, str]], tools: List[Any], max_iterations: int, output_schema: Optional[Type[Any]] = None) -> Any:
+        def _exec():
+            from langgraph.prebuilt import create_react_agent
+            lc_messages = self._convert_messages(messages)
+            agent_executor = create_react_agent(self.model, tools=tools)
+            inputs = {"messages": lc_messages}
+            result = agent_executor.invoke(inputs, config={"recursion_limit": max_iterations})
+            final_message = result["messages"][-1]
+            
+            if output_schema:
+                 structured_model = self.model.with_structured_output(output_schema)
+                 return structured_model.invoke([HumanMessage(content=str(final_message.content))])
+            return str(final_message.content)
+
+        return self._trace("invoke_agent_loop", messages, _exec)
 
 class LangChainLLMFactory(LLMFactory):
-    def __init__(self, config: LLMConfig):
+    def __init__(self, config: LLMConfig, container: Any = None):
         self.config = config
+        self.container = container 
 
     def create(self, model_name: str, temperature: float, max_tokens: Optional[int], llm_profile: Optional[str] = None) -> LLM:
         final_provider = None
@@ -91,8 +105,17 @@ class LangChainLLMFactory(LLMFactory):
                  chat_model.max_tokens = max_tokens
              except AttributeError:
                  pass
-                 
-        return LangChainAdapter(chat_model)
+        
+        tracer = None
+        if self.container:
+            try:
+                from .tracing import TraceService
+                if self.container.has(TraceService):
+                    tracer = self.container.get(TraceService)
+            except ImportError:
+                pass
+
+        return LangChainAdapter(chat_model, tracer, real_model_name)
 
     def _get_api_key(self, provider: str, profile: Optional[str]) -> Optional[str]:
         if profile and profile in self.config.api_keys:

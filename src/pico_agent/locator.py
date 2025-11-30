@@ -13,6 +13,9 @@ class NoOpCentralClient(CentralConfigClient):
 
 @factory
 class AgentInfrastructureFactory:
+    def __init__(self, container: PicoContainer):
+        self.container = container
+
     @provides(CentralConfigClient, scope="singleton")
     def provide_central_config(self) -> CentralConfigClient: 
         return NoOpCentralClient()
@@ -23,7 +26,7 @@ class AgentInfrastructureFactory:
 
     @provides(LLMFactory, scope="singleton")
     def provide_llm_factory(self, config: LLMConfig) -> LLMFactory:
-        return LangChainLLMFactory(config)
+        return LangChainLLMFactory(config, self.container)
 
 @component(scope="singleton")
 class AgentLocator:
