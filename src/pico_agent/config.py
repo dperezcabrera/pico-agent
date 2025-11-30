@@ -17,7 +17,8 @@ class AgentCapability:
 class AgentConfig:
     name: str
     system_prompt: str
-    user_prompt_template: str
+    user_prompt_template: str = "{input}"
+    description: str = ""
     capability: str = AgentCapability.SMART
     enabled: bool = True
     agent_type: AgentType = AgentType.ONE_SHOT
@@ -29,6 +30,11 @@ class AgentConfig:
     temperature: float = 0.7
     max_tokens: Optional[int] = None
     llm_profile: Optional[str] = None
+
+@dataclass
+class ToolConfig:
+    name: str
+    description: str
 
 @dataclass
 class LLMConfig:
