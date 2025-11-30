@@ -9,6 +9,7 @@ from .router import ModelRouter
 from .exceptions import AgentDisabledError
 from .tools import AgentAsTool, ToolWrapper
 from .decorators import TOOL_META_KEY
+from .tracing import TraceService
 
 @component
 class TracedAgentProxy:
@@ -88,6 +89,10 @@ class DynamicAgentProxy:
         self.model_router = model_router
         self.container = container
         self.locator = locator
+        
+        self.tracer = None
+        if self.container.has(TraceService):
+            self.tracer = self.container.get(TraceService)
 
     def __getattr__(self, name: str) -> Any:
         if name.startswith("_"):
@@ -117,7 +122,25 @@ class DynamicAgentProxy:
         def method_wrapper(*args, **kwargs):
             input_context = self._extract_input_context(method_sig, args, kwargs)
             runtime_model = kwargs.pop("model", kwargs.pop("_model", None))
-            return self._execute(input_context, return_type, runtime_model)
+            
+            run_id = None
+            if self.tracer:
+                run_id = self.tracer.start_run(
+                    name=self.agent_name,
+                    run_type="agent",
+                    inputs=input_context,
+                    extra={"runtime_model": runtime_model}
+                )
+
+            try:
+                result = self._execute(input_context, return_type, runtime_model)
+                if self.tracer and run_id:
+                    self.tracer.end_run(run_id, outputs=result)
+                return result
+            except Exception as e:
+                if self.tracer and run_id:
+                    self.tracer.end_run(run_id, error=e)
+                raise e
         
         return method_wrapper
 
