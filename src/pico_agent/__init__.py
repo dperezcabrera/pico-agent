@@ -8,6 +8,7 @@ from .virtual_tools import VirtualToolManager, DynamicTool
 from .validation import AgentValidator, ValidationReport, ValidationIssue, Severity
 from .locator import AgentLocator
 from .tracing import TraceService, TraceRun
+from .experiments import ExperimentRegistry
 from .exceptions import AgentError, AgentDisabledError, AgentConfigurationError
 
 __all__ = [
@@ -31,6 +32,7 @@ __all__ = [
     "AgentLocator",
     "TraceService",
     "TraceRun",
+    "ExperimentRegistry",
     "AgentValidator",
     "ValidationReport",
     "ValidationIssue",
