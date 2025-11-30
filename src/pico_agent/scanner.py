@@ -1,6 +1,7 @@
 import inspect
 from typing import Set, Any
 from pico_ioc import component, configure
+from pico_ioc.factory import DeferredProvider, ProviderMetadata
 from .decorators import IS_AGENT_INTERFACE, AGENT_META_KEY, TOOL_META_KEY
 from .registry import LocalAgentRegistry, ToolRegistry
 
