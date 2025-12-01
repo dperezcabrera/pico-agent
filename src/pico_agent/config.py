@@ -1,10 +1,11 @@
 from dataclasses import dataclass, field
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any
 from enum import Enum
 
 class AgentType(str, Enum):
     ONE_SHOT = "one_shot"
     REACT = "react"
+    WORKFLOW = "workflow"
 
 class AgentCapability:
     FAST = "fast"
@@ -16,7 +17,7 @@ class AgentCapability:
 @dataclass
 class AgentConfig:
     name: str
-    system_prompt: str
+    system_prompt: str = ""
     user_prompt_template: str = "{input}"
     description: str = ""
     capability: str = AgentCapability.SMART
@@ -30,6 +31,7 @@ class AgentConfig:
     temperature: float = 0.7
     max_tokens: Optional[int] = None
     llm_profile: Optional[str] = None
+    workflow_config: Dict[str, Any] = field(default_factory=dict)
 
 @dataclass
 class ToolConfig:

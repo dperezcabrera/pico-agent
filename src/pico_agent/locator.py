@@ -8,6 +8,7 @@ from .virtual import VirtualAgentRunner
 from .router import ModelRouter
 from .providers import LangChainLLMFactory
 from .experiments import ExperimentRegistry
+from .scheduler import PlatformScheduler
 
 class NoOpCentralClient(CentralConfigClient):
     def get_agent_config(self, name: str) -> Optional[AgentConfig]: return None
@@ -40,7 +41,8 @@ class AgentLocator:
         llm_factory: LLMFactory,
         local_registry: LocalAgentRegistry,
         model_router: ModelRouter,
-        experiment_registry: ExperimentRegistry
+        experiment_registry: ExperimentRegistry,
+        scheduler: PlatformScheduler
     ):
         self.container = container
         self.config_service = config_service
@@ -49,6 +51,7 @@ class AgentLocator:
         self.local_registry = local_registry
         self.model_router = model_router
         self.experiment_registry = experiment_registry
+        self.scheduler = scheduler
 
     def get_agent(self, name_or_protocol: Any) -> Optional[Any]:
         agent_name = ""
@@ -83,7 +86,9 @@ class AgentLocator:
                     tool_registry=self.tool_registry,
                     llm_factory=self.llm_factory,
                     model_router=self.model_router,
-                    container=self.container
+                    container=self.container,
+                    locator=self,
+                    scheduler=self.scheduler
                 )
         except ValueError:
             pass
