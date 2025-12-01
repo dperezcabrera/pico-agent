@@ -17,6 +17,7 @@ T = TypeVar("T")
 
 class VirtualAgent(Protocol):
     def run(self, input: str) -> str: ...
+    async def arun(self, input: str) -> str: ...
     def run_structured(self, input: str, schema: Type[T]) -> T: ...
     def run_with_args(self, args: Dict[str, Any]) -> str: ...
 
@@ -67,13 +68,26 @@ class VirtualAgentRunner:
     def run(self, input: str) -> str:
         return self.run_with_args({"input": input})
 
+    async def arun(self, input: str) -> str:
+        if self.config.agent_type == AgentType.WORKFLOW:
+            return await self._arun_workflow({"input": input})
+        
+        return await asyncio.to_thread(self.run, input)
+
     def run_with_args(self, args: Dict[str, Any]) -> str:
         if not self.config.enabled:
             return "Agent is disabled."
 
         if self.config.agent_type == AgentType.WORKFLOW:
-            input_val = args.get("input", str(args))
-            return self._run_workflow(input_val)
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                loop = None
+
+            if loop and loop.is_running():
+                raise RuntimeError("Cannot call sync run() from inside an async loop. Use await agent.arun() instead.")
+            
+            return asyncio.run(self._arun_workflow(args))
 
         llm = self._create_llm()
         resolved_tools = self._resolve_tools()
@@ -98,27 +112,24 @@ class VirtualAgentRunner:
 
         return llm.invoke_structured(messages, resolved_tools, schema)
 
-    def _run_workflow(self, input: str) -> str:
+    async def _arun_workflow(self, args: Dict[str, Any]) -> str:
         workflow_type = self.config.workflow_config.get("type")
+        input_val = args.get("input", str(args))
         
         if workflow_type == "map_reduce":
-            return self._run_map_reduce(input)
+            return await self._arun_map_reduce(input_val)
         
-        raise ValueError(f"Unknown workflow type: {workflow_type} for agent {self.config.name}")
+        raise ValueError(f"Unknown workflow type: {workflow_type}")
 
-    def _run_map_reduce(self, input: str) -> str:
+    async def _arun_map_reduce(self, input: str) -> str:
         cfg = self.config.workflow_config
         splitter_name = cfg.get("splitter")
         reducer_name = cfg.get("reducer")
-        
         mappers_cfg = cfg.get("mappers")
         simple_mapper = cfg.get("mapper")
 
         if not splitter_name or not reducer_name:
             raise ValueError("Map-Reduce requires 'splitter' and 'reducer'")
-        
-        if not mappers_cfg and not simple_mapper:
-            raise ValueError("Map-Reduce requires either 'mapper' (string) or 'mappers' (dict)")
 
         workflow = StateGraph(MapReduceState)
         
@@ -131,26 +142,24 @@ class VirtualAgentRunner:
             task_item: TaskItem = state["task_item"]
             
             if mappers_cfg and isinstance(mappers_cfg, dict):
-                worker_name = mappers_cfg.get(task_item.worker_type)
-                if not worker_name:
-                    worker_name = simple_mapper
+                worker_name = mappers_cfg.get(task_item.worker_type) or simple_mapper
             else:
                 worker_name = simple_mapper
 
             if not worker_name:
-                 return {"mapped_results": [f"Error: No worker found for type {task_item.worker_type}"]}
+                 return {"mapped_results": [f"Error: No worker found"]}
 
             worker = self.locator.get_agent(worker_name)
             
             async with self.scheduler.semaphore:
-                result = worker.run_with_args(task_item.arguments)
+                result = await asyncio.to_thread(worker.run_with_args, task_item.arguments)
             
             return {"mapped_results": [result]}
 
         async def reducer_node(state: MapReduceState):
             reducer = self.locator.get_agent(reducer_name)
             combined_input = "\n\n".join(state["mapped_results"])
-            final = reducer.run(combined_input)
+            final = await asyncio.to_thread(reducer.run, combined_input)
             return {"final_output": final}
 
         def distribute_tasks(state: MapReduceState):
@@ -166,16 +175,8 @@ class VirtualAgentRunner:
         workflow.add_edge("reducer", END)
 
         app = workflow.compile()
-        
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = None
-
-        if loop and loop.is_running():
-            return asyncio.run(app.ainvoke({"input": input}))["final_output"]
-        else:
-            return asyncio.run(app.ainvoke({"input": input}))["final_output"]
+        result = await app.ainvoke({"input": input})
+        return result["final_output"]
 
     def _resolve_tools(self) -> List[Any]:
         final_tools = []
