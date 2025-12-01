@@ -1,4 +1,5 @@
 import inspect
+import asyncio
 from typing import Any, List, Dict, Type, get_type_hints, Optional
 from pydantic import BaseModel
 from pico_ioc import component, PicoContainer
@@ -133,10 +134,21 @@ class DynamicAgentProxy:
                 )
 
             try:
-                result = self._execute(input_context, return_type, runtime_model)
-                if self.tracer and run_id:
-                    self.tracer.end_run(run_id, outputs=result)
-                return result
+                is_async = inspect.iscoroutinefunction(method_ref)
+                
+                if is_async:
+                    async def async_inner():
+                        result = await self._execute_async(input_context, return_type, runtime_model)
+                        if self.tracer and run_id:
+                            self.tracer.end_run(run_id, outputs=result)
+                        return result
+                    return async_inner()
+                else:
+                    result = self._execute(input_context, return_type, runtime_model)
+                    if self.tracer and run_id:
+                        self.tracer.end_run(run_id, outputs=result)
+                    return result
+
             except Exception as e:
                 if self.tracer and run_id:
                     self.tracer.end_run(run_id, error=e)
@@ -153,6 +165,9 @@ class DynamicAgentProxy:
                 continue
             context[name] = str(val)
         return context
+
+    async def _execute_async(self, input_context: Dict[str, Any], return_type: Type, runtime_model: Optional[str]) -> Any:
+        return await asyncio.to_thread(self._execute, input_context, return_type, runtime_model)
 
     def _execute(self, input_context: Dict[str, Any], return_type: Type, runtime_model: Optional[str]) -> Any:
         config = self.config_service.get_config(self.agent_name)
