@@ -8,6 +8,7 @@
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=dperezcabrera_pico-agent&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=dperezcabrera_pico-agent)
 [![Duplicated Lines (%)](https://sonarcloud.io/api/project_badges/measure?project=dperezcabrera_pico-agent&metric=duplicated_lines_density)](https://sonarcloud.io/summary/new_code?id=dperezcabrera_pico-agent)
 [![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=dperezcabrera_pico-agent&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=dperezcabrera_pico-agent)
+[![Docs](https://img.shields.io/badge/Docs-pico--agent-blue?style=flat&logo=readthedocs&logoColor=white)](https://dperezcabrera.github.io/pico-agent/)
 
 
 # Pico-Agent
