@@ -7,8 +7,8 @@ name = "pico-agent"
 dynamic = ["version"]
 authors = [{ name = "David Perez Cabrera", email = "dperezcabrera@gmail.com" }]
 description = "A pico agent framework with LangChain integration."
-readme = { file = "pico.txt", content-type = "text/markdown" }
-requires-python = ">=3.10"
+readme = { file = "README.md", content-type = "text/markdown" }
+requires-python = ">=3.11"
 license = { file = "LICENSE" }
 keywords = [
     "ioc", 
@@ -25,7 +25,6 @@ classifiers = [
     "Framework :: AsyncIO",
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -69,11 +68,13 @@ where = ["src"]
 include = ["pico_agent*"]
 
 [tool.setuptools_scm]
-version_scheme = "post-release"
+version_scheme = "guess-next-dev"
 local_scheme = "no-local-version"
 fallback_version = "0.1.0"
 write_to = "src/pico_agent/_version.py"
 write_to_template = "__version__ = '{version}'\n"
 
-[project.entry-points."pico_framework.modules"]
+[project.entry-points."pico_boot.modules"]
 pico_agent = "pico_agent"
+
+[project.entry-points."pico_agent.plugins"]

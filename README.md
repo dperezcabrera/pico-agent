@@ -3,7 +3,7 @@
 [![PyPI](https://img.shields.io/pypi/v/pico-agent.svg)](https://pypi.org/project/pico-agent/)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/dperezcabrera/pico-agent)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-![CI (tox matrix)](https://github.com/dperezcabrera/pico-ioc/actions/workflows/ci.yml/badge.svg)
+![CI (tox matrix)](https://github.com/dperezcabrera/pico-agent/actions/workflows/ci.yml/badge.svg)
 [![codecov](https://codecov.io/gh/dperezcabrera/pico-agent/branch/main/graph/badge.svg)](https://codecov.io/gh/dperezcabrera/pico-agent)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=dperezcabrera_pico-agent&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=dperezcabrera_pico-agent)
 [![Duplicated Lines (%)](https://sonarcloud.io/api/project_badges/measure?project=dperezcabrera_pico-agent&metric=duplicated_lines_density)](https://sonarcloud.io/summary/new_code?id=dperezcabrera_pico-agent)
@@ -62,13 +62,11 @@ pip install "pico-agent[openai,google]"
 
 -----
 
-## 🚀 Quick Example (with pico-stack)
-
-The best way to use `pico-agent` is with `pico-stack`, which handles auto-discovery out of the box.
+## 🚀 Quick Example
 
 ### 1\. Define the Agent Protocol
 
-The docstring becomes the system prompt. The method signature defines the tool input.
+The method signature defines the tool input. The `@agent` decorator configures everything else.
 
 ```python
 from typing import Protocol
@@ -105,23 +103,32 @@ class AppConfig:
 
 ### 3\. Run the Application
 
+pico-agent includes its own `init()` that wraps `pico_ioc.init()` with automatic module inclusion and plugin discovery:
+
 ```python
-import src
-from pico_stack import init
+from pico_agent import init
 from app.agents import TranslatorAgent
 
 def main():
     # Scans modules, finds agents, wires dependencies
-    container = init(src)
+    container = init(modules=["app"])
 
     # Get your agent instance (auto-generated proxy)
     translator = container.get(TranslatorAgent)
 
     result = translator.translate(text="Dependency Injection is cool")
-    print(result) # "La inyección de dependencias es genial"
+    print(result)
 
 if __name__ == "__main__":
     main()
+```
+
+You can also use `pico_ioc.init()` directly — just include `"pico_agent"` in your modules list:
+
+```python
+from pico_ioc import init
+
+container = init(modules=["pico_agent", "app"])
 ```
 
 -----
@@ -194,6 +201,19 @@ class RouterConfig:
 
 -----
 
+## 🔌 With pico-boot
+
+If you use [pico-boot](https://github.com/dperezcabrera/pico-boot), pico-agent is automatically discovered via entry points — no need to include it in your modules list:
+
+```python
+from pico_boot import init
+
+container = init(modules=["app"])
+# pico-agent is auto-discovered and loaded!
+```
+
+-----
+
 ## 🧪 Testing
 
 Testing is simple because you can mock the underlying `LLMFactory` or the agent protocol itself.
@@ -214,7 +234,6 @@ def test_my_agent():
     container = init(
         modules=["pico_agent", "my_app"],
         overrides={LLMFactory: mock_factory},
-        custom_scanners=[AgentScanner()] # If not using pico-stack
     )
     
     agent = container.get(MyAgent)
@@ -222,6 +241,19 @@ def test_my_agent():
 ```
 
 -----
+
+## 🤖 Claude Code Skills
+
+This project includes pre-designed skills for [Claude Code](https://claude.ai/claude-code), enabling AI-assisted development with pico-agent patterns.
+
+| Skill | Command | Description |
+|-------|---------|-------------|
+| **Pico Agent Creator** | `/pico-agent` | Creates LLM agents with tools, prompts and configuration |
+| **Pico Test Generator** | `/pico-tests` | Generates tests for pico-framework components |
+
+See [Skills documentation](docs/skills.md) for full details and installation instructions.
+
+---
 
 ## 📝 License
 

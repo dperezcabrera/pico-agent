@@ -9,7 +9,10 @@ from .validation import AgentValidator, ValidationReport, ValidationIssue, Sever
 from .locator import AgentLocator
 from .tracing import TraceService, TraceRun
 from .experiments import ExperimentRegistry
-from .exceptions import AgentError, AgentDisabledError, AgentConfigurationError
+from .exceptions import AgentError, AgentDisabledError, AgentConfigurationError, AgentLifecycleError
+from .lifecycle import AgentSystem, LifecyclePhase, LifecycleEvent
+from .bootstrap import init
+from .logging import configure_logging, get_logger
 
 __all__ = [
     "AgentConfig",
@@ -39,5 +42,12 @@ __all__ = [
     "Severity",
     "AgentError",
     "AgentDisabledError",
-    "AgentConfigurationError"
+    "AgentConfigurationError",
+    "AgentLifecycleError",
+    "AgentSystem",
+    "LifecyclePhase",
+    "LifecycleEvent",
+    "init",
+    "configure_logging",
+    "get_logger",
 ]

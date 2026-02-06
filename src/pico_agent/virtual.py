@@ -11,6 +11,7 @@ from .interfaces import LLMFactory
 from .router import ModelRouter
 from .tools import ToolWrapper
 from .decorators import TOOL_META_KEY
+from .messages import build_messages
 from .scheduler import PlatformScheduler
 
 T = TypeVar("T")
@@ -91,7 +92,7 @@ class VirtualAgentRunner:
 
         llm = self._create_llm()
         resolved_tools = self._resolve_tools()
-        messages = self._build_messages(args)
+        messages = build_messages(self.config, args)
 
         if self.config.agent_type == AgentType.REACT:
             return llm.invoke_agent_loop(
@@ -108,7 +109,7 @@ class VirtualAgentRunner:
 
         llm = self._create_llm()
         resolved_tools = self._resolve_tools()
-        messages = self._build_messages({"input": input})
+        messages = build_messages(self.config, {"input": input})
 
         return llm.invoke_structured(messages, resolved_tools, schema)
 
@@ -197,25 +198,6 @@ class VirtualAgentRunner:
                 else:
                     final_tools.append(tool_instance)
         return final_tools
-
-    def _build_messages(self, context: Dict[str, Any]) -> List[Dict[str, str]]:
-        messages = []
-        if self.config.system_prompt:
-            try:
-                sys_content = self.config.system_prompt.format(**context)
-            except KeyError:
-                sys_content = self.config.system_prompt
-            messages.append({"role": "system", "content": sys_content})
-        
-        try:
-            user_content = self.config.user_prompt_template.format(**context)
-        except KeyError:
-            user_content = str(context)
-            if "input" in context:
-                user_content = context["input"]
-
-        messages.append({"role": "user", "content": user_content})
-        return messages
 
 @component
 class VirtualAgentManager:

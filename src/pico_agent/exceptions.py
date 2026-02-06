@@ -7,3 +7,6 @@ class AgentDisabledError(AgentError):
 
 class AgentConfigurationError(AgentError):
     pass
+
+class AgentLifecycleError(AgentError):
+    pass
