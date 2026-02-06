@@ -9,6 +9,7 @@ from .router import ModelRouter
 from .providers import LangChainLLMFactory
 from .experiments import ExperimentRegistry
 from .scheduler import PlatformScheduler
+from .decorators import AGENT_META_KEY
 
 class NoOpCentralClient(CentralConfigClient):
     def get_agent_config(self, name: str) -> Optional[AgentConfig]: return None
@@ -59,7 +60,6 @@ class AgentLocator:
 
         if isinstance(name_or_protocol, type):
             protocol = name_or_protocol
-            from .decorators import AGENT_META_KEY
             if hasattr(protocol, AGENT_META_KEY):
                 agent_name = getattr(protocol, AGENT_META_KEY).name
             else:
@@ -108,6 +108,5 @@ class AgentLocator:
         )
     
     def create_proxy(self, protocol: Type) -> Any:
-        from .decorators import AGENT_META_KEY
         config = getattr(protocol, AGENT_META_KEY)
         return self._create_proxy(config.name, protocol)

@@ -11,6 +11,10 @@ from .exceptions import AgentDisabledError
 from .tools import AgentAsTool, ToolWrapper
 from .decorators import TOOL_META_KEY
 from .tracing import TraceService
+from .messages import build_messages
+from .logging import get_logger
+
+logger = get_logger(__name__)
 
 @component
 class TracedAgentProxy:
@@ -152,7 +156,7 @@ class DynamicAgentProxy:
             except Exception as e:
                 if self.tracer and run_id:
                     self.tracer.end_run(run_id, error=e)
-                raise e
+                raise
         
         return method_wrapper
 
@@ -188,7 +192,7 @@ class DynamicAgentProxy:
         )
 
         resolved_tools = self._resolve_dependencies(config)
-        messages = self._build_messages(config, input_context)
+        messages = build_messages(config, input_context)
         
         target_schema = return_type if self._is_pydantic_model(return_type) else None
 
@@ -205,77 +209,89 @@ class DynamicAgentProxy:
             return llm.invoke(messages, resolved_tools)
 
     def _resolve_dependencies(self, config: AgentConfig) -> List[Any]:
+        """Resolve all tool dependencies for agent execution."""
         final_tools = []
-        
+
+        # Resolve named tools
         for tool_name in config.tools:
-            tool_instance = None
-            
-            if self.container.has(tool_name):
-                tool_instance = self.container.get(tool_name)
-            
-            elif self.tool_registry.get_tool(tool_name):
-                tool_ref = self.tool_registry.get_tool(tool_name)
-                if isinstance(tool_ref, type):
-                    tool_instance = tool_ref()
-                else:
-                    tool_instance = tool_ref
-            
-            if tool_instance:
-                if hasattr(tool_instance, "args_schema") and hasattr(tool_instance, "name") and hasattr(tool_instance, "description"):
-                    final_tools.append(tool_instance)
-                elif hasattr(type(tool_instance), TOOL_META_KEY):
-                    tool_config = getattr(type(tool_instance), TOOL_META_KEY)
-                    final_tools.append(ToolWrapper(tool_instance, tool_config))
-                else:
-                    final_tools.append(tool_instance)
+            tool = self._resolve_tool(tool_name)
+            if tool:
+                final_tools.append(self._wrap_tool(tool))
 
+        # Resolve child agents as tools
         if self.locator:
-            for agent_name in config.agents:
-                try:
-                    child_agent = self.locator.get_agent(agent_name)
-                    if child_agent:
-                        child_config = self.config_service.get_config(agent_name)
-                        if not child_config.enabled: continue
-                        
-                        method_name = "invoke"
-                        if child_agent.protocol_cls:
-                            protocol = child_agent.protocol_cls
-                            candidates = [n for n, m in inspect.getmembers(protocol) if not n.startswith("_") and (inspect.isfunction(m) or inspect.ismethod(m))]
-                            if "invoke" in candidates:
-                                method_name = "invoke"
-                            elif candidates:
-                                method_name = candidates[0]
-                        
-                        adapter = AgentAsTool(child_agent, method_name)
-                        final_tools.append(adapter)
-                except Exception:
-                    pass
+            self._resolve_child_agents(config.agents, final_tools)
 
-        dynamic = self.tool_registry.get_dynamic_tools(config.tags)
-        for dt in dynamic:
-            if dt not in final_tools:
-                final_tools.append(dt)
-        
+        # Add dynamic tools by tags
+        self._add_dynamic_tools(config.tags, final_tools)
+
         return final_tools
 
-    def _build_messages(self, config: AgentConfig, input_context: Dict[str, Any]) -> List[Dict[str, str]]:
-        messages = []
-        if config.system_prompt:
+    def _resolve_tool(self, tool_name: str) -> Any:
+        """Resolve a tool by name from container or registry."""
+        if self.container.has(tool_name):
+            return self.container.get(tool_name)
+
+        tool_ref = self.tool_registry.get_tool(tool_name)
+        if tool_ref:
+            return tool_ref() if isinstance(tool_ref, type) else tool_ref
+        return None
+
+    def _wrap_tool(self, tool_instance: Any) -> Any:
+        """Wrap tool instance if needed."""
+        if self._is_langchain_tool(tool_instance):
+            return tool_instance
+        if hasattr(type(tool_instance), TOOL_META_KEY):
+            return ToolWrapper(tool_instance, getattr(type(tool_instance), TOOL_META_KEY))
+        return tool_instance
+
+    def _is_langchain_tool(self, obj: Any) -> bool:
+        """Check if object is a LangChain-compatible tool."""
+        return hasattr(obj, "args_schema") and hasattr(obj, "name") and hasattr(obj, "description")
+
+    def _resolve_child_agents(self, agent_names: List[str], final_tools: List[Any]) -> None:
+        """Resolve child agents and add them as tools."""
+        for agent_name in agent_names:
             try:
-                sys_content = config.system_prompt.format(**input_context)
-            except KeyError:
-                sys_content = config.system_prompt
-            messages.append({"role": "system", "content": sys_content})
-        
-        user_content = " ".join(input_context.values())
-        if config.user_prompt_template:
-            try:
-                user_content = config.user_prompt_template.format(**input_context)
-            except KeyError:
-                pass
-        
-        messages.append({"role": "user", "content": user_content})
-        return messages
+                adapter = self._create_agent_tool(agent_name)
+                if adapter:
+                    final_tools.append(adapter)
+            except AgentDisabledError:
+                logger.debug("Child agent disabled, skipping: %s", agent_name)
+            except ValueError as e:
+                logger.warning("Failed to resolve child agent %s: %s", agent_name, e)
+
+    def _create_agent_tool(self, agent_name: str) -> Optional[AgentAsTool]:
+        """Create an AgentAsTool for a child agent."""
+        child_agent = self.locator.get_agent(agent_name)
+        if not child_agent:
+            return None
+
+        child_config = self.config_service.get_config(agent_name)
+        if not child_config.enabled:
+            return None
+
+        method_name = self._get_agent_method_name(child_agent)
+        return AgentAsTool(child_agent, method_name)
+
+    def _get_agent_method_name(self, agent: Any) -> str:
+        """Determine the method name to use for agent invocation."""
+        if not agent.protocol_cls:
+            return "invoke"
+
+        candidates = [
+            n for n, m in inspect.getmembers(agent.protocol_cls)
+            if not n.startswith("_") and (inspect.isfunction(m) or inspect.ismethod(m))
+        ]
+        if "invoke" in candidates:
+            return "invoke"
+        return candidates[0] if candidates else "invoke"
+
+    def _add_dynamic_tools(self, tags: List[str], final_tools: List[Any]) -> None:
+        """Add dynamic tools by tags, avoiding duplicates."""
+        for dt in self.tool_registry.get_dynamic_tools(tags):
+            if dt not in final_tools:
+                final_tools.append(dt)
 
     def _is_pydantic_model(self, cls: Type) -> bool:
         try:

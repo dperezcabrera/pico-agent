@@ -3,6 +3,10 @@ from langchain_core.messages import SystemMessage, HumanMessage, BaseMessage, AI
 from langchain_core.language_models.chat_models import BaseChatModel
 from .interfaces import LLM, LLMFactory
 from .config import LLMConfig
+from .exceptions import AgentConfigurationError
+from .logging import get_logger
+
+logger = get_logger(__name__)
 
 class LangChainAdapter(LLM):
     def __init__(self, chat_model: BaseChatModel, tracer: Any = None, model_name: str = ""):
@@ -38,7 +42,7 @@ class LangChainAdapter(LLM):
         except Exception as e:
             if self.tracer and run_id:
                 self.tracer.end_run(run_id, error=e)
-            raise e
+            raise
 
     def invoke(self, messages: List[Dict[str, str]], tools: List[Any]) -> str:
         def _exec():
@@ -136,97 +140,113 @@ class LangChainLLMFactory(LLMFactory):
         elif "azure" in name_lower: return "azure"
         return "openai"
 
+    def _require_key(self, provider_name: str, profile: Optional[str]) -> str:
+        """Get API key or raise configuration error."""
+        key = self._get_api_key(provider_name, profile)
+        if not key:
+            raise AgentConfigurationError(
+                f"API Key not found for provider '{provider_name}' (Profile: '{profile}'). "
+                "Please configure it via LLMConfig."
+            )
+        return key
+
+    def _create_openai(self, model_name: str, profile: Optional[str], timeout: int) -> BaseChatModel:
+        try:
+            from langchain_openai import ChatOpenAI
+            api_key = self._require_key("openai", profile)
+            return ChatOpenAI(model=model_name, api_key=api_key, request_timeout=timeout)
+        except ImportError:
+            raise ImportError("Please install 'pico-agent[openai]' to use this provider.")
+
+    def _create_azure(self, model_name: str, profile: Optional[str], timeout: int) -> BaseChatModel:
+        try:
+            from langchain_openai import AzureChatOpenAI
+            import os
+            api_key = self._require_key("azure", profile)
+            return AzureChatOpenAI(
+                azure_deployment=model_name,
+                openai_api_version=os.getenv("AZURE_OPENAI_API_VERSION"),
+                api_key=api_key,
+                request_timeout=timeout,
+            )
+        except ImportError:
+            raise ImportError("Please install 'pico-agent[openai]' to use Azure OpenAI.")
+
+    def _create_gemini(self, model_name: str, profile: Optional[str], timeout: int) -> BaseChatModel:
+        try:
+            from langchain_google_genai import ChatGoogleGenerativeAI
+            api_key = self._require_key("google", profile)
+            return ChatGoogleGenerativeAI(
+                model=model_name,
+                google_api_key=api_key,
+                temperature=0.0,
+                request_timeout=timeout,
+            )
+        except ImportError:
+            raise ImportError("Please install 'pico-agent[google]' to use Gemini.")
+
+    def _create_anthropic(self, model_name: str, profile: Optional[str], timeout: int) -> BaseChatModel:
+        try:
+            from langchain_anthropic import ChatAnthropic
+            api_key = self._require_key("anthropic", profile)
+            base_url = self._get_base_url("anthropic", None, profile)
+            return ChatAnthropic(
+                model=model_name,
+                api_key=api_key,
+                base_url=base_url,
+                temperature=0.0,
+                default_request_timeout=timeout
+            )
+        except ImportError:
+            raise ImportError("Please install 'pico-agent[anthropic]' to use Claude.")
+
+    def _create_deepseek(self, model_name: str, profile: Optional[str], timeout: int) -> BaseChatModel:
+        try:
+            from langchain_openai import ChatOpenAI
+            base_url = self._get_base_url("deepseek", "https://api.deepseek.com/v1", profile)
+            api_key = self._require_key("deepseek", profile)
+            return ChatOpenAI(
+                model=model_name,
+                base_url=base_url,
+                api_key=api_key,
+                temperature=0.0,
+                request_timeout=timeout,
+            )
+        except ImportError:
+            raise ImportError("Please install 'pico-agent[openai]' to use DeepSeek.")
+
+    def _create_qwen(self, model_name: str, profile: Optional[str], timeout: int) -> BaseChatModel:
+        try:
+            from langchain_openai import ChatOpenAI
+            base_url = self._get_base_url("qwen", "https://dashscope.aliyuncs.com/compatible-mode/v1", profile)
+            api_key = self._require_key("qwen", profile)
+            return ChatOpenAI(
+                model=model_name,
+                base_url=base_url,
+                api_key=api_key,
+                temperature=0.0,
+                request_timeout=timeout,
+            )
+        except ImportError:
+            raise ImportError("Please install 'pico-agent[openai]' to use Qwen.")
+
     def create_chat_model(self, provider: str, model_name: str, profile: Optional[str]) -> BaseChatModel:
         provider_lower = provider.lower()
         timeout = 60
-        
-        def require_key(p_name, key_val):
-            if not key_val:
-                raise ValueError(
-                    f"API Key not found for provider '{p_name}' (Profile: '{profile}'). "
-                    "Please configure it via LLMConfig."
-                )
-            return key_val
-        
-        if provider_lower == "openai":
-            try:
-                from langchain_openai import ChatOpenAI
-                api_key = require_key("openai", self._get_api_key("openai", profile))
-                return ChatOpenAI(model=model_name, api_key=api_key, request_timeout=timeout)
-            except ImportError:
-                raise ImportError("Please install 'pico-agent[openai]' to use this provider.")
-                
-        elif provider_lower == "azure":
-            try:
-                from langchain_openai import AzureChatOpenAI
-                import os
-                api_key = require_key("azure", self._get_api_key("azure", profile))
-                return AzureChatOpenAI(
-                    azure_deployment=model_name,
-                    openai_api_version=os.getenv("AZURE_OPENAI_API_VERSION"), 
-                    api_key=api_key,
-                    request_timeout=timeout,
-                )
-            except ImportError:
-                raise ImportError("Please install 'pico-agent[openai]' to use Azure OpenAI.")
 
-        elif provider_lower == "gemini" or provider_lower == "google":
-            try:
-                from langchain_google_genai import ChatGoogleGenerativeAI
-                api_key = require_key("google", self._get_api_key("google", profile))
-                return ChatGoogleGenerativeAI(
-                    model=model_name,
-                    google_api_key=api_key,
-                    temperature=0.0,
-                    request_timeout=timeout,
-                )
-            except ImportError:
-                raise ImportError("Please install 'pico-agent[google]' to use Gemini.")
+        providers = {
+            "openai": self._create_openai,
+            "azure": self._create_azure,
+            "gemini": self._create_gemini,
+            "google": self._create_gemini,
+            "claude": self._create_anthropic,
+            "anthropic": self._create_anthropic,
+            "deepseek": self._create_deepseek,
+            "qwen": self._create_qwen,
+        }
 
-        elif provider_lower == "claude" or provider_lower == "anthropic":
-            try:
-                from langchain_anthropic import ChatAnthropic
-                api_key = require_key("anthropic", self._get_api_key("anthropic", profile))
-                base_url = self._get_base_url("anthropic", None, profile)
-                return ChatAnthropic(
-                    model=model_name, 
-                    api_key=api_key,
-                    base_url=base_url,
-                    temperature=0.0, 
-                    default_request_timeout=timeout
-                )
-            except ImportError:
-                raise ImportError("Please install 'pico-agent[anthropic]' to use Claude.")
-
-        elif provider_lower == "deepseek":
-            try:
-                from langchain_openai import ChatOpenAI
-                base_url = self._get_base_url("deepseek", "https://api.deepseek.com/v1", profile)
-                api_key = require_key("deepseek", self._get_api_key("deepseek", profile))
-                return ChatOpenAI(
-                    model=model_name,
-                    base_url=base_url,
-                    api_key=api_key,
-                    temperature=0.0,
-                    request_timeout=timeout,
-                )
-            except ImportError:
-                raise ImportError("Please install 'pico-agent[openai]' to use DeepSeek.")
-
-        elif provider_lower == "qwen":
-            try:
-                from langchain_openai import ChatOpenAI
-                base_url = self._get_base_url("qwen", "https://dashscope.aliyuncs.com/compatible-mode/v1", profile)
-                api_key = require_key("qwen", self._get_api_key("qwen", profile))
-                return ChatOpenAI(
-                    model=model_name,
-                    base_url=base_url,
-                    api_key=api_key,
-                    temperature=0.0,
-                    request_timeout=timeout,
-                )
-            except ImportError:
-                raise ImportError("Please install 'pico-agent[openai]' to use Qwen.")
-
-        else:
+        creator = providers.get(provider_lower)
+        if not creator:
             raise ValueError(f"Unknown LLM Provider: {provider}")
+
+        return creator(model_name, profile, timeout)

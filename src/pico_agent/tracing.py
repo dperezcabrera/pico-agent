@@ -1,11 +1,12 @@
 import time
 import uuid
-import json
-import logging
 from typing import Dict, Any, Optional, List
 from contextvars import ContextVar
 from dataclasses import dataclass, field, asdict
-from pico_ioc import component
+from pico_ioc import component, cleanup
+from .logging import get_logger
+
+logger = get_logger(__name__)
 
 run_context = ContextVar("run_context", default=None)
 
@@ -26,7 +27,6 @@ class TraceRun:
 class TraceService:
     def __init__(self):
         self.traces: List[TraceRun] = []
-        self.logger = logging.getLogger("pico_agent.tracer")
 
     def start_run(self, name: str, run_type: str, inputs: Dict[str, Any], extra: Dict[str, Any] = None) -> str:
         parent_id = run_context.get()
@@ -67,6 +67,11 @@ class TraceService:
 
     def _persist(self, run: TraceRun):
         pass
+
+    @cleanup
+    def _on_shutdown(self):
+        logger.debug("TraceService: flushing %d traces", len(self.traces))
+        self.traces.clear()
 
     def get_traces(self) -> List[Dict[str, Any]]:
         return [asdict(t) for t in self.traces]

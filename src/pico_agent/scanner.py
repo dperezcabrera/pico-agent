@@ -4,6 +4,9 @@ from pico_ioc import component, configure
 from pico_ioc.factory import DeferredProvider, ProviderMetadata
 from .decorators import IS_AGENT_INTERFACE, AGENT_META_KEY, TOOL_META_KEY
 from .registry import LocalAgentRegistry, ToolRegistry
+from .logging import get_logger
+
+logger = get_logger(__name__)
 
 @component
 class AgentScanner:
@@ -31,7 +34,8 @@ class AgentScanner:
 
         try:
             members = inspect.getmembers(module)
-        except Exception:
+        except (TypeError, ModuleNotFoundError) as e:
+            logger.warning("Cannot inspect module %s: %s", mod_name, e)
             return
 
         for name, obj in members:
@@ -65,7 +69,8 @@ class ToolScanner:
 
         try:
             members = inspect.getmembers(module)
-        except Exception:
+        except (TypeError, ModuleNotFoundError) as e:
+            logger.warning("Cannot inspect module %s: %s", mod_name, e)
             return
 
         for name, obj in members:
