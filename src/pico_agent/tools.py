@@ -2,6 +2,9 @@ import inspect
 from typing import Any, Type, get_type_hints, Optional
 from pydantic import BaseModel, create_model
 from .config import ToolConfig
+from .logging import get_logger
+
+logger = get_logger(__name__)
 
 class ToolWrapper:
     def __init__(self, instance: Any, config: ToolConfig):
@@ -53,7 +56,8 @@ class AgentAsTool:
                 try:
                     cfg = config_service.get_config(self.name)
                     self.description = cfg.description or f"Agent {self.name}"
-                except Exception:
+                except (ValueError, KeyError) as e:
+                    logger.debug("Could not get config for agent %s: %s", self.name, e)
                     self.description = f"Agent {self.name}"
             else:
                 self.description = f"Agent {self.name}"

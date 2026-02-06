@@ -1,4 +1,4 @@
-from typing import Dict, Any, Optional, List, Type
+from typing import Dict, Any, List, Optional, Type
 from dataclasses import replace
 from pico_ioc import component
 from .config import AgentConfig
@@ -10,7 +10,8 @@ class ToolRegistry:
         self._tools: Dict[str, Any] = {}
         self._tag_map: Dict[str, List[str]] = {}
 
-    def register(self, name: str, tool_cls_or_instance: Any, tags: List[str] = []) -> None:
+    def register(self, name: str, tool_cls_or_instance: Any, tags: Optional[List[str]] = None) -> None:
+        tags = tags or []
         self._tools[name] = tool_cls_or_instance
         for tag in tags:
             if tag not in self._tag_map:
