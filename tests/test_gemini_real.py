@@ -1,11 +1,14 @@
 import os
-import pytest
 from typing import Protocol
-from pico_ioc import init, component, configure
-from pico_agent import agent, AgentCapability, AgentType
+
+import pytest
+from pico_ioc import component, configure, init
+
+from pico_agent import AgentCapability, AgentType, agent
 from pico_agent.config import LLMConfig
-from pico_agent.router import ModelRouter
 from pico_agent.locator import AgentLocator
+from pico_agent.router import ModelRouter
+
 
 @agent(
     name="gemini_translator",
@@ -13,10 +16,11 @@ from pico_agent.locator import AgentLocator
     system_prompt="Translate inputs.",
     user_prompt_template="{text}",
     agent_type=AgentType.ONE_SHOT,
-    temperature=0.1
+    temperature=0.1,
 )
 class GeminiTranslator(Protocol):
     def translate(self, text: str) -> str: ...
+
 
 @component
 class TestConfiguration:
@@ -25,14 +29,10 @@ class TestConfiguration:
         key = os.getenv("GOOGLE_API_KEY")
         config.api_keys["google"] = key
 
-@pytest.mark.skipif(
-    not os.getenv("GOOGLE_API_KEY"), 
-    reason="GOOGLE_API_KEY not found in environment variables"
-)
+
+@pytest.mark.skipif(not os.getenv("GOOGLE_API_KEY"), reason="GOOGLE_API_KEY not found in environment variables")
 def test_real_gemini_translation_with_configure():
-    container = init(
-        modules=["pico_agent", __name__]
-    )
+    container = init(modules=["pico_agent", __name__])
 
     container.get(TestConfiguration)
 
@@ -41,10 +41,9 @@ def test_real_gemini_translation_with_configure():
 
     locator = container.get(AgentLocator)
     translator = locator.get_agent(GeminiTranslator)
-    
+
     result = translator.translate(text="Hello world, this is a test using standard config.")
 
     assert result is not None
     assert len(result) > 0
     assert "Hola" in result or "prueba" in result.lower()
-

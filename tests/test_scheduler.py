@@ -1,7 +1,8 @@
-import pytest
 import asyncio
 import os
 from unittest.mock import patch
+
+import pytest
 
 from pico_agent.scheduler import PlatformScheduler
 

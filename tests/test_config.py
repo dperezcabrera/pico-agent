@@ -1,5 +1,6 @@
 import pytest
-from pico_agent.config import AgentConfig, AgentType, AgentCapability, LLMConfig, ToolConfig
+
+from pico_agent.config import AgentCapability, AgentConfig, AgentType, LLMConfig, ToolConfig
 
 
 class TestAgentType:

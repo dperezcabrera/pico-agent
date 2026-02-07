@@ -1,6 +1,7 @@
 import pytest
-from pico_agent.router import ModelRouter
+
 from pico_agent.config import AgentCapability
+from pico_agent.router import ModelRouter
 
 
 class TestModelRouter:
@@ -33,10 +34,7 @@ class TestModelRouter:
         assert model == "gpt-5.1"
 
     def test_runtime_override_takes_precedence(self, router):
-        model = router.resolve_model(
-            AgentCapability.FAST,
-            runtime_override="claude-opus-4"
-        )
+        model = router.resolve_model(AgentCapability.FAST, runtime_override="claude-opus-4")
         assert model == "claude-opus-4"
 
     def test_update_mapping(self, router):
@@ -59,7 +57,7 @@ class TestModelRouterIntegration:
             AgentCapability.SMART,
             AgentCapability.REASONING,
             AgentCapability.VISION,
-            AgentCapability.CODING
+            AgentCapability.CODING,
         ]
 
         for cap in capabilities:

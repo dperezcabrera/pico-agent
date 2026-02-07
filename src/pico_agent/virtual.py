@@ -1,20 +1,23 @@
-import operator
 import asyncio
-from typing import Any, Protocol, List, Dict, Annotated, TypedDict, Type, TypeVar
-from pydantic import BaseModel, Field
-from pico_ioc import component, PicoContainer
-from langgraph.graph import StateGraph, END
+import operator
+from typing import Annotated, Any, Dict, List, Protocol, Type, TypedDict, TypeVar
+
+from langgraph.graph import END, StateGraph
 from langgraph.types import Send
+from pico_ioc import PicoContainer, component
+from pydantic import BaseModel, Field
+
 from .config import AgentConfig, AgentType
-from .registry import AgentConfigService, ToolRegistry
-from .interfaces import LLMFactory
-from .router import ModelRouter
-from .tools import ToolWrapper
 from .decorators import TOOL_META_KEY
+from .interfaces import LLMFactory
 from .messages import build_messages
+from .registry import AgentConfigService, ToolRegistry
+from .router import ModelRouter
 from .scheduler import PlatformScheduler
+from .tools import ToolWrapper
 
 T = TypeVar("T")
+
 
 class VirtualAgent(Protocol):
     def run(self, input: str) -> str: ...
@@ -22,18 +25,22 @@ class VirtualAgent(Protocol):
     def run_structured(self, input: str, schema: Type[T]) -> T: ...
     def run_with_args(self, args: Dict[str, Any]) -> str: ...
 
+
 class TaskItem(BaseModel):
     worker_type: str = Field(description="The type of worker agent to handle this task")
     arguments: Dict[str, Any] = Field(description="The structured arguments/payload for the worker")
 
+
 class SplitterOutput(BaseModel):
     tasks: List[TaskItem] = Field(description="The list of tasks to be distributed")
+
 
 class MapReduceState(TypedDict):
     input: str
     tasks: List[TaskItem]
     mapped_results: Annotated[List[str], operator.add]
     final_output: str
+
 
 class VirtualAgentRunner:
     def __init__(
@@ -44,7 +51,7 @@ class VirtualAgentRunner:
         model_router: ModelRouter,
         container: PicoContainer,
         locator: Any,
-        scheduler: PlatformScheduler
+        scheduler: PlatformScheduler,
     ):
         self.config = config
         self.tool_registry = tool_registry
@@ -55,15 +62,12 @@ class VirtualAgentRunner:
         self.scheduler = scheduler
 
     def _create_llm(self):
-        final_model_name = self.model_router.resolve_model(
-            capability=self.config.capability,
-            runtime_override=None
-        )
+        final_model_name = self.model_router.resolve_model(capability=self.config.capability, runtime_override=None)
         return self.llm_factory.create(
             model_name=final_model_name,
             temperature=self.config.temperature,
             max_tokens=self.config.max_tokens,
-            llm_profile=self.config.llm_profile
+            llm_profile=self.config.llm_profile,
         )
 
     def run(self, input: str) -> str:
@@ -72,7 +76,7 @@ class VirtualAgentRunner:
     async def arun(self, input: str) -> str:
         if self.config.agent_type == AgentType.WORKFLOW:
             return await self._arun_workflow({"input": input})
-        
+
         return await asyncio.to_thread(self.run, input)
 
     def run_with_args(self, args: Dict[str, Any]) -> str:
@@ -87,7 +91,7 @@ class VirtualAgentRunner:
 
             if loop and loop.is_running():
                 raise RuntimeError("Cannot call sync run() from inside an async loop. Use await agent.arun() instead.")
-            
+
             return asyncio.run(self._arun_workflow(args))
 
         llm = self._create_llm()
@@ -95,11 +99,7 @@ class VirtualAgentRunner:
         messages = build_messages(self.config, args)
 
         if self.config.agent_type == AgentType.REACT:
-            return llm.invoke_agent_loop(
-                messages,
-                resolved_tools,
-                self.config.max_iterations
-            )
+            return llm.invoke_agent_loop(messages, resolved_tools, self.config.max_iterations)
         else:
             return llm.invoke(messages, resolved_tools)
 
@@ -116,10 +116,10 @@ class VirtualAgentRunner:
     async def _arun_workflow(self, args: Dict[str, Any]) -> str:
         workflow_type = self.config.workflow_config.get("type")
         input_val = args.get("input", str(args))
-        
+
         if workflow_type == "map_reduce":
             return await self._arun_map_reduce(input_val)
-        
+
         raise ValueError(f"Unknown workflow type: {workflow_type}")
 
     async def _arun_map_reduce(self, input: str) -> str:
@@ -133,7 +133,7 @@ class VirtualAgentRunner:
             raise ValueError("Map-Reduce requires 'splitter' and 'reducer'")
 
         workflow = StateGraph(MapReduceState)
-        
+
         async def splitter_node(state: MapReduceState):
             splitter = self.locator.get_agent(splitter_name)
             result: SplitterOutput = splitter.run_structured(state["input"], SplitterOutput)
@@ -141,20 +141,20 @@ class VirtualAgentRunner:
 
         async def mapper_node(state: dict):
             task_item: TaskItem = state["task_item"]
-            
+
             if mappers_cfg and isinstance(mappers_cfg, dict):
                 worker_name = mappers_cfg.get(task_item.worker_type) or simple_mapper
             else:
                 worker_name = simple_mapper
 
             if not worker_name:
-                 return {"mapped_results": [f"Error: No worker found"]}
+                return {"mapped_results": ["Error: No worker found"]}
 
             worker = self.locator.get_agent(worker_name)
-            
+
             async with self.scheduler.semaphore:
                 result = await asyncio.to_thread(worker.run_with_args, task_item.arguments)
-            
+
             return {"mapped_results": [result]}
 
         async def reducer_node(state: MapReduceState):
@@ -188,7 +188,7 @@ class VirtualAgentRunner:
             elif self.tool_registry.get_tool(tool_name):
                 tool_ref = self.tool_registry.get_tool(tool_name)
                 tool_instance = tool_ref() if isinstance(tool_ref, type) else tool_ref
-            
+
             if tool_instance:
                 if hasattr(tool_instance, "args_schema") and hasattr(tool_instance, "name"):
                     final_tools.append(tool_instance)
@@ -199,6 +199,7 @@ class VirtualAgentRunner:
                     final_tools.append(tool_instance)
         return final_tools
 
+
 @component
 class VirtualAgentManager:
     def __init__(
@@ -208,7 +209,7 @@ class VirtualAgentManager:
         llm_factory: LLMFactory,
         model_router: ModelRouter,
         container: PicoContainer,
-        scheduler: PlatformScheduler
+        scheduler: PlatformScheduler,
     ):
         self.config_service = config_service
         self.tool_registry = tool_registry
@@ -227,6 +228,7 @@ class VirtualAgentManager:
 
     def get_agent(self, name: str) -> VirtualAgent:
         from .locator import AgentLocator
+
         locator = self.container.get(AgentLocator)
         config = self.config_service.get_config(name)
         return VirtualAgentRunner(
@@ -236,5 +238,5 @@ class VirtualAgentManager:
             model_router=self.model_router,
             container=self.container,
             locator=locator,
-            scheduler=self.scheduler
+            scheduler=self.scheduler,
         )

@@ -1,9 +1,10 @@
-import pytest
 from unittest.mock import MagicMock, Mock
 
-from pico_agent.config import AgentConfig, AgentType, AgentCapability, LLMConfig
-from pico_agent.interfaces import LLM, LLMFactory, CentralConfigClient
-from pico_agent.registry import ToolRegistry, LocalAgentRegistry, AgentConfigService
+import pytest
+
+from pico_agent.config import AgentCapability, AgentConfig, AgentType, LLMConfig
+from pico_agent.interfaces import LLM, CentralConfigClient, LLMFactory
+from pico_agent.registry import AgentConfigService, LocalAgentRegistry, ToolRegistry
 from pico_agent.router import ModelRouter
 
 
@@ -47,7 +48,7 @@ def sample_agent_config():
         agents=[],
         tags=["test"],
         temperature=0.5,
-        max_tokens=1000
+        max_tokens=1000,
     )
 
 
@@ -65,18 +66,14 @@ def sample_react_config():
         agents=["child_agent"],
         tags=["react"],
         temperature=0.3,
-        max_iterations=10
+        max_iterations=10,
     )
 
 
 @pytest.fixture
 def disabled_agent_config():
     """Create a disabled AgentConfig for testing."""
-    return AgentConfig(
-        name="disabled_agent",
-        system_prompt="I am disabled",
-        enabled=False
-    )
+    return AgentConfig(name="disabled_agent", system_prompt="I am disabled", enabled=False)
 
 
 @pytest.fixture
@@ -101,9 +98,7 @@ def model_router():
 def config_service(mock_central_client, local_registry, sample_agent_config):
     """Create an AgentConfigService with mocked dependencies."""
     local_registry.register(
-        sample_agent_config.name,
-        type("TestProtocol", (), {"invoke": lambda self, x: x}),
-        sample_agent_config
+        sample_agent_config.name, type("TestProtocol", (), {"invoke": lambda self, x: x}), sample_agent_config
     )
     return AgentConfigService(mock_central_client, local_registry)
 
@@ -121,19 +116,14 @@ def base_container(mock_llm_factory, mock_central_client):
 def llm_config():
     """Create a sample LLMConfig."""
     return LLMConfig(
-        api_keys={
-            "openai": "test-openai-key",
-            "anthropic": "test-anthropic-key",
-            "google": "test-google-key"
-        },
-        base_urls={
-            "custom": "https://custom.api.example.com"
-        }
+        api_keys={"openai": "test-openai-key", "anthropic": "test-anthropic-key", "google": "test-google-key"},
+        base_urls={"custom": "https://custom.api.example.com"},
     )
 
 
 class MockModule:
     """A mock module for testing scanner functionality."""
+
     __name__ = "test_module"
 
 

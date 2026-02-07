@@ -1,7 +1,9 @@
-import pytest
-import logging
 import io
-from pico_agent.logging import get_logger, configure_logging, DEFAULT_FORMAT
+import logging
+
+import pytest
+
+from pico_agent.logging import DEFAULT_FORMAT, configure_logging, get_logger
 
 
 class TestGetLogger:

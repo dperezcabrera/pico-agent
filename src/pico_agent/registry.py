@@ -1,8 +1,11 @@
-from typing import Dict, Any, List, Optional, Type
 from dataclasses import replace
+from typing import Any, Dict, List, Optional, Type
+
 from pico_ioc import component
+
 from .config import AgentConfig
 from .interfaces import CentralConfigClient
+
 
 @component
 class ToolRegistry:
@@ -32,13 +35,14 @@ class ToolRegistry:
                 t = self._tools.get(name)
                 if t and t not in found_tools:
                     found_tools.append(t)
-        
+
         global_names = self._tag_map.get("global", [])
         for name in global_names:
             t = self._tools.get(name)
             if t and t not in found_tools:
                 found_tools.append(t)
         return found_tools
+
 
 @component
 class LocalAgentRegistry:
@@ -56,6 +60,7 @@ class LocalAgentRegistry:
     def get_protocol(self, name: str) -> Optional[Type]:
         return self._protocols.get(name)
 
+
 @component
 class AgentConfigService:
     def __init__(self, central_client: CentralConfigClient, local_registry: LocalAgentRegistry):
@@ -67,7 +72,7 @@ class AgentConfigService:
     def get_config(self, name: str) -> AgentConfig:
         remote_config = self.central_client.get_agent_config(name)
         local_config = self.local_registry.get_config(name)
-        
+
         base_config = remote_config or local_config
         runtime_data = self._runtime_overrides.get(name)
 
@@ -75,7 +80,7 @@ class AgentConfigService:
             if runtime_data:
                 return replace(base_config, **runtime_data)
             return base_config
-        
+
         elif runtime_data:
             config_data = runtime_data.copy()
             if "name" not in config_data:

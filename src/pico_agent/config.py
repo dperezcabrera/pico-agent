@@ -1,11 +1,13 @@
 from dataclasses import dataclass, field
-from typing import List, Optional, Dict, Any
 from enum import Enum
+from typing import Any, Dict, List, Optional
+
 
 class AgentType(str, Enum):
     ONE_SHOT = "one_shot"
     REACT = "react"
     WORKFLOW = "workflow"
+
 
 class AgentCapability:
     FAST = "fast"
@@ -13,6 +15,7 @@ class AgentCapability:
     REASONING = "reasoning"
     VISION = "vision"
     CODING = "coding"
+
 
 @dataclass
 class AgentConfig:
@@ -33,10 +36,12 @@ class AgentConfig:
     llm_profile: Optional[str] = None
     workflow_config: Dict[str, Any] = field(default_factory=dict)
 
+
 @dataclass
 class ToolConfig:
     name: str
     description: str
+
 
 @dataclass
 class LLMConfig:

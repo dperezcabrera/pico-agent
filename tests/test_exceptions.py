@@ -1,5 +1,6 @@
 import pytest
-from pico_agent.exceptions import AgentError, AgentDisabledError, AgentConfigurationError
+
+from pico_agent.exceptions import AgentConfigurationError, AgentDisabledError, AgentError
 
 
 class TestAgentError:

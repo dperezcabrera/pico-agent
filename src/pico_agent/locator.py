@@ -1,19 +1,26 @@
-from typing import Optional, Any, Type
-from pico_ioc import factory, provides, component, PicoContainer
-from .interfaces import CentralConfigClient, LLMFactory
+from typing import Any, Optional, Type
+
+from pico_ioc import PicoContainer, component, factory, provides
+
 from .config import AgentConfig, LLMConfig
-from .registry import AgentConfigService, ToolRegistry, LocalAgentRegistry
-from .proxy import DynamicAgentProxy
-from .virtual import VirtualAgentRunner
-from .router import ModelRouter
-from .providers import LangChainLLMFactory
-from .experiments import ExperimentRegistry
-from .scheduler import PlatformScheduler
 from .decorators import AGENT_META_KEY
+from .experiments import ExperimentRegistry
+from .interfaces import CentralConfigClient, LLMFactory
+from .providers import LangChainLLMFactory
+from .proxy import DynamicAgentProxy
+from .registry import AgentConfigService, LocalAgentRegistry, ToolRegistry
+from .router import ModelRouter
+from .scheduler import PlatformScheduler
+from .virtual import VirtualAgentRunner
+
 
 class NoOpCentralClient(CentralConfigClient):
-    def get_agent_config(self, name: str) -> Optional[AgentConfig]: return None
-    def upsert_agent_config(self, config: AgentConfig) -> None: pass
+    def get_agent_config(self, name: str) -> Optional[AgentConfig]:
+        return None
+
+    def upsert_agent_config(self, config: AgentConfig) -> None:
+        pass
+
 
 @factory
 class AgentInfrastructureFactory:
@@ -21,9 +28,9 @@ class AgentInfrastructureFactory:
         self.container = container
 
     @provides(CentralConfigClient, scope="singleton")
-    def provide_central_config(self) -> CentralConfigClient: 
+    def provide_central_config(self) -> CentralConfigClient:
         return NoOpCentralClient()
-    
+
     @provides(LLMConfig, scope="singleton")
     def provide_llm_config(self) -> LLMConfig:
         return LLMConfig()
@@ -31,6 +38,7 @@ class AgentInfrastructureFactory:
     @provides(LLMFactory, scope="singleton")
     def provide_llm_factory(self, config: LLMConfig) -> LLMFactory:
         return LangChainLLMFactory(config, self.container)
+
 
 @component(scope="singleton")
 class AgentLocator:
@@ -43,7 +51,7 @@ class AgentLocator:
         local_registry: LocalAgentRegistry,
         model_router: ModelRouter,
         experiment_registry: ExperimentRegistry,
-        scheduler: PlatformScheduler
+        scheduler: PlatformScheduler,
     ):
         self.container = container
         self.config_service = config_service
@@ -73,11 +81,11 @@ class AgentLocator:
             protocol = self.local_registry.get_protocol(agent_name)
 
         if not agent_name:
-             return None
+            return None
 
         if protocol:
             return self._create_proxy(agent_name, protocol)
-        
+
         try:
             config = self.config_service.get_config(agent_name)
             if config:
@@ -88,7 +96,7 @@ class AgentLocator:
                     model_router=self.model_router,
                     container=self.container,
                     locator=self,
-                    scheduler=self.scheduler
+                    scheduler=self.scheduler,
                 )
         except ValueError:
             pass
@@ -104,9 +112,9 @@ class AgentLocator:
             llm_factory=self.llm_factory,
             model_router=self.model_router,
             container=self.container,
-            locator=self
+            locator=self,
         )
-    
+
     def create_proxy(self, protocol: Type) -> Any:
         config = getattr(protocol, AGENT_META_KEY)
         return self._create_proxy(config.name, protocol)

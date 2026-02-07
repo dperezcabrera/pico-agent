@@ -1,13 +1,14 @@
-import pytest
 from unittest.mock import MagicMock, Mock, patch
 
-from pico_agent.config import AgentConfig, AgentType, AgentCapability
-from pico_agent.proxy import TracedAgentProxy, DynamicAgentProxy
+import pytest
+
+from pico_agent.config import AgentCapability, AgentConfig, AgentType
 from pico_agent.exceptions import AgentDisabledError
-from pico_agent.registry import AgentConfigService, ToolRegistry, LocalAgentRegistry
+from pico_agent.interfaces import LLMFactory
+from pico_agent.proxy import DynamicAgentProxy, TracedAgentProxy
+from pico_agent.registry import AgentConfigService, LocalAgentRegistry, ToolRegistry
 from pico_agent.router import ModelRouter
 from pico_agent.tracing import TraceService
-from pico_agent.interfaces import LLMFactory
 
 
 def create_mock_container(with_tracer=False):
@@ -30,54 +31,49 @@ class TestTracedAgentProxy:
             config_service=config_service,
             tool_registry=tool_registry,
             llm_factory=mock_llm_factory,
-            model_router=model_router
+            model_router=model_router,
         )
         result = proxy.execute_agent("test_agent", "Hello")
         mock_llm.invoke.assert_called_once()
         assert result == "mocked response"
 
     def test_execute_disabled_agent_raises_error(
-        self, mock_llm_factory, config_service, tool_registry, model_router,
-        local_registry, disabled_agent_config
+        self, mock_llm_factory, config_service, tool_registry, model_router, local_registry, disabled_agent_config
     ):
-        local_registry.register(
-            disabled_agent_config.name,
-            type("DisabledProtocol", (), {}),
-            disabled_agent_config
-        )
+        local_registry.register(disabled_agent_config.name, type("DisabledProtocol", (), {}), disabled_agent_config)
         proxy = TracedAgentProxy(
             config_service=config_service,
             tool_registry=tool_registry,
             llm_factory=mock_llm_factory,
-            model_router=model_router
+            model_router=model_router,
         )
         with pytest.raises(AgentDisabledError):
             proxy.execute_agent("disabled_agent", "test input")
 
     def test_execute_react_agent_uses_agent_loop(
-        self, mock_llm_factory, mock_llm, tool_registry, model_router,
-        mock_central_client, local_registry, sample_react_config
+        self,
+        mock_llm_factory,
+        mock_llm,
+        tool_registry,
+        model_router,
+        mock_central_client,
+        local_registry,
+        sample_react_config,
     ):
-        local_registry.register(
-            sample_react_config.name,
-            type("ReactProtocol", (), {}),
-            sample_react_config
-        )
+        local_registry.register(sample_react_config.name, type("ReactProtocol", (), {}), sample_react_config)
         config_service = AgentConfigService(mock_central_client, local_registry)
 
         proxy = TracedAgentProxy(
             config_service=config_service,
             tool_registry=tool_registry,
             llm_factory=mock_llm_factory,
-            model_router=model_router
+            model_router=model_router,
         )
         result = proxy.execute_agent("react_agent", "Process this")
         mock_llm.invoke_agent_loop.assert_called_once()
         assert result == "agent loop result"
 
-    def test_resolves_tools_from_registry(
-        self, mock_llm_factory, config_service, model_router
-    ):
+    def test_resolves_tools_from_registry(self, mock_llm_factory, config_service, model_router):
         tool_registry = ToolRegistry()
         mock_tool = MagicMock()
         mock_tool.name = "tool1"
@@ -87,7 +83,7 @@ class TestTracedAgentProxy:
             config_service=config_service,
             tool_registry=tool_registry,
             llm_factory=mock_llm_factory,
-            model_router=model_router
+            model_router=model_router,
         )
         proxy.execute_agent("test_agent", "test")
 
@@ -105,6 +101,7 @@ class TestDynamicAgentProxy:
 
             def process(self, data: str, count: int = 1) -> str:
                 pass
+
         return TestProtocol
 
     @pytest.fixture
@@ -112,17 +109,12 @@ class TestDynamicAgentProxy:
         """Create a config service with its own local registry to avoid fixture conflicts."""
         registry = LocalAgentRegistry()
         registry.register(
-            sample_agent_config.name,
-            type("TestProtocol", (), {"invoke": lambda self, x: x}),
-            sample_agent_config
+            sample_agent_config.name, type("TestProtocol", (), {"invoke": lambda self, x: x}), sample_agent_config
         )
         return AgentConfigService(mock_central_client, registry)
 
     @pytest.fixture
-    def dynamic_proxy(
-        self, protocol_cls, local_config_service, tool_registry,
-        mock_llm_factory, model_router
-    ):
+    def dynamic_proxy(self, protocol_cls, local_config_service, tool_registry, mock_llm_factory, model_router):
         container, _ = create_mock_container(with_tracer=False)
         return DynamicAgentProxy(
             agent_name="test_agent",
@@ -132,7 +124,7 @@ class TestDynamicAgentProxy:
             llm_factory=mock_llm_factory,
             model_router=model_router,
             container=container,
-            locator=None
+            locator=None,
         )
 
     def test_getattr_returns_callable(self, dynamic_proxy):
@@ -152,15 +144,10 @@ class TestDynamicAgentProxy:
         assert result == "mocked response"
 
     def test_execute_disabled_agent_raises(
-        self, protocol_cls, tool_registry, mock_llm_factory,
-        model_router, mock_central_client, disabled_agent_config
+        self, protocol_cls, tool_registry, mock_llm_factory, model_router, mock_central_client, disabled_agent_config
     ):
         local_registry = LocalAgentRegistry()
-        local_registry.register(
-            disabled_agent_config.name,
-            protocol_cls,
-            disabled_agent_config
-        )
+        local_registry.register(disabled_agent_config.name, protocol_cls, disabled_agent_config)
         config_service = AgentConfigService(mock_central_client, local_registry)
         container, _ = create_mock_container(with_tracer=False)
 
@@ -172,16 +159,19 @@ class TestDynamicAgentProxy:
             llm_factory=mock_llm_factory,
             model_router=model_router,
             container=container,
-            locator=None
+            locator=None,
         )
         with pytest.raises(AgentDisabledError):
             proxy.invoke("test")
 
     def test_extracts_input_context(self, dynamic_proxy):
         import inspect
+
         from pico_agent.proxy import DynamicAgentProxy
 
-        def sample_method(a: str, b: int = 5): pass
+        def sample_method(a: str, b: int = 5):
+            pass
+
         sig = inspect.signature(sample_method)
 
         context = dynamic_proxy._extract_input_context(sig, ("hello",), {"b": 10})
@@ -191,22 +181,22 @@ class TestDynamicAgentProxy:
     def test_builds_messages_with_system_prompt(self, dynamic_proxy):
         from pico_agent.config import AgentConfig
         from pico_agent.messages import build_messages
+
         config = AgentConfig(
             name="test",
             system_prompt="System prompt here",
         )
-        messages = build_messages(
-            config,
-            {"input": "test message"}
-        )
+        messages = build_messages(config, {"input": "test message"})
         assert len(messages) == 2
         assert messages[0]["role"] == "system"
         assert messages[1]["role"] == "user"
 
     def test_is_pydantic_model_returns_true_for_pydantic(self, dynamic_proxy):
         from pydantic import BaseModel
+
         class TestModel(BaseModel):
             value: str
+
         assert dynamic_proxy._is_pydantic_model(TestModel) is True
 
     def test_is_pydantic_model_returns_false_for_non_pydantic(self, dynamic_proxy):
@@ -225,7 +215,7 @@ class TestDynamicAgentProxy:
             llm_factory=mock_llm_factory,
             model_router=model_router,
             container=container,
-            locator=None
+            locator=None,
         )
         with pytest.raises(AttributeError) as exc_info:
             _ = proxy.invoke
@@ -238,9 +228,7 @@ class TestDynamicAgentProxyWithTracing:
     ):
         local_registry = LocalAgentRegistry()
         local_registry.register(
-            sample_agent_config.name,
-            type("TestProtocol", (), {"invoke": lambda self, x: x}),
-            sample_agent_config
+            sample_agent_config.name, type("TestProtocol", (), {"invoke": lambda self, x: x}), sample_agent_config
         )
         config_service = AgentConfigService(mock_central_client, local_registry)
 
@@ -261,7 +249,7 @@ class TestDynamicAgentProxyWithTracing:
             llm_factory=mock_llm_factory,
             model_router=model_router,
             container=container,
-            locator=None
+            locator=None,
         )
 
         proxy.invoke("test message")
@@ -279,9 +267,7 @@ class TestErrorPropagation:
         """Test that using 'raise' preserves the original traceback."""
         local_registry = LocalAgentRegistry()
         local_registry.register(
-            sample_agent_config.name,
-            type("TestProtocol", (), {"invoke": lambda self, x: x}),
-            sample_agent_config
+            sample_agent_config.name, type("TestProtocol", (), {"invoke": lambda self, x: x}), sample_agent_config
         )
         config_service = AgentConfigService(mock_central_client, local_registry)
 
@@ -304,7 +290,7 @@ class TestErrorPropagation:
             llm_factory=mock_llm_factory,
             model_router=model_router,
             container=container,
-            locator=None
+            locator=None,
         )
 
         with pytest.raises(ValueError) as exc_info:

@@ -1,20 +1,23 @@
-import inspect
 import asyncio
-from typing import Any, List, Dict, Type, get_type_hints, Optional
+import inspect
+from typing import Any, Dict, List, Optional, Type, get_type_hints
+
+from pico_ioc import PicoContainer, component
 from pydantic import BaseModel
-from pico_ioc import component, PicoContainer
+
 from .config import AgentConfig, AgentType
-from .registry import AgentConfigService, ToolRegistry
-from .interfaces import LLMFactory
-from .router import ModelRouter
-from .exceptions import AgentDisabledError
-from .tools import AgentAsTool, ToolWrapper
 from .decorators import TOOL_META_KEY
-from .tracing import TraceService
-from .messages import build_messages
+from .exceptions import AgentDisabledError
+from .interfaces import LLMFactory
 from .logging import get_logger
+from .messages import build_messages
+from .registry import AgentConfigService, ToolRegistry
+from .router import ModelRouter
+from .tools import AgentAsTool, ToolWrapper
+from .tracing import TraceService
 
 logger = get_logger(__name__)
+
 
 @component
 class TracedAgentProxy:
@@ -23,7 +26,7 @@ class TracedAgentProxy:
         config_service: AgentConfigService,
         tool_registry: ToolRegistry,
         llm_factory: LLMFactory,
-        model_router: ModelRouter
+        model_router: ModelRouter,
     ):
         self.config_service = config_service
         self.tool_registry = tool_registry
@@ -32,19 +35,14 @@ class TracedAgentProxy:
 
     def execute_agent(self, agent_name: str, user_input: str) -> Any:
         config = self.config_service.get_config(agent_name)
-        
+
         if not config.enabled:
             raise AgentDisabledError(agent_name)
-        
-        final_model_name = self.model_router.resolve_model(
-            capability=config.capability,
-            runtime_override=None
-        )
-        
+
+        final_model_name = self.model_router.resolve_model(capability=config.capability, runtime_override=None)
+
         llm = self.llm_factory.create(
-            model_name=final_model_name,
-            temperature=config.temperature,
-            max_tokens=config.max_tokens
+            model_name=final_model_name, temperature=config.temperature, max_tokens=config.max_tokens
         )
 
         resolved_tools = []
@@ -52,7 +50,7 @@ class TracedAgentProxy:
             t = self.tool_registry.get_tool(tool_name)
             if t:
                 resolved_tools.append(t)
-        
+
         dynamic = self.tool_registry.get_dynamic_tools(config.tags)
         for dt in dynamic:
             if dt not in resolved_tools:
@@ -61,15 +59,11 @@ class TracedAgentProxy:
         messages = []
         if config.system_prompt:
             messages.append({"role": "system", "content": config.system_prompt})
-        
+
         messages.append({"role": "user", "content": user_input})
-        
+
         if config.agent_type == AgentType.REACT:
-            return llm.invoke_agent_loop(
-                messages, 
-                resolved_tools, 
-                config.max_iterations
-            )
+            return llm.invoke_agent_loop(messages, resolved_tools, config.max_iterations)
         else:
             return llm.invoke(messages, resolved_tools)
 
@@ -84,7 +78,7 @@ class DynamicAgentProxy:
         llm_factory: LLMFactory,
         model_router: ModelRouter,
         container: PicoContainer,
-        locator: Any = None 
+        locator: Any = None,
     ):
         self.agent_name = agent_name
         self.protocol_cls = protocol_cls
@@ -94,28 +88,28 @@ class DynamicAgentProxy:
         self.model_router = model_router
         self.container = container
         self.locator = locator
-        
+
         self.tracer = None
         if self.container.has(TraceService):
             self.tracer = self.container.get(TraceService)
 
     def __getattr__(self, name: str) -> Any:
         if name.startswith("_"):
-             raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
+            raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
 
         if not self.protocol_cls:
-             raise AttributeError(f"Virtual Agent '{self.agent_name}' has no protocol definition.")
+            raise AttributeError(f"Virtual Agent '{self.agent_name}' has no protocol definition.")
 
         if not hasattr(self.protocol_cls, name):
             raise AttributeError(f"Agent {self.agent_name} has no method {name}")
-        
+
         method_ref = getattr(self.protocol_cls, name)
 
         if not callable(method_ref):
             return method_ref
-        
+
         method_sig = inspect.signature(method_ref)
-        
+
         params = list(method_sig.parameters.values())
         if params and params[0].name == "self":
             new_params = params[1:]
@@ -127,25 +121,24 @@ class DynamicAgentProxy:
         def method_wrapper(*args, **kwargs):
             input_context = self._extract_input_context(method_sig, args, kwargs)
             runtime_model = kwargs.pop("model", kwargs.pop("_model", None))
-            
+
             run_id = None
             if self.tracer:
                 run_id = self.tracer.start_run(
-                    name=self.agent_name,
-                    run_type="agent",
-                    inputs=input_context,
-                    extra={"runtime_model": runtime_model}
+                    name=self.agent_name, run_type="agent", inputs=input_context, extra={"runtime_model": runtime_model}
                 )
 
             try:
                 is_async = inspect.iscoroutinefunction(method_ref)
-                
+
                 if is_async:
+
                     async def async_inner():
                         result = await self._execute_async(input_context, return_type, runtime_model)
                         if self.tracer and run_id:
                             self.tracer.end_run(run_id, outputs=result)
                         return result
+
                     return async_inner()
                 else:
                     result = self._execute(input_context, return_type, runtime_model)
@@ -157,7 +150,7 @@ class DynamicAgentProxy:
                 if self.tracer and run_id:
                     self.tracer.end_run(run_id, error=e)
                 raise
-        
+
         return method_wrapper
 
     def _extract_input_context(self, sig: inspect.Signature, args: tuple, kwargs: dict) -> Dict[str, Any]:
@@ -165,44 +158,38 @@ class DynamicAgentProxy:
         bound.apply_defaults()
         context = {}
         for name, val in bound.arguments.items():
-            if name in ("model", "_model", "self"): 
+            if name in ("model", "_model", "self"):
                 continue
             context[name] = str(val)
         return context
 
-    async def _execute_async(self, input_context: Dict[str, Any], return_type: Type, runtime_model: Optional[str]) -> Any:
+    async def _execute_async(
+        self, input_context: Dict[str, Any], return_type: Type, runtime_model: Optional[str]
+    ) -> Any:
         return await asyncio.to_thread(self._execute, input_context, return_type, runtime_model)
 
     def _execute(self, input_context: Dict[str, Any], return_type: Type, runtime_model: Optional[str]) -> Any:
         config = self.config_service.get_config(self.agent_name)
-        
+
         if not config.enabled:
             raise AgentDisabledError(self.agent_name)
-        
-        final_model_name = self.model_router.resolve_model(
-            capability=config.capability,
-            runtime_override=runtime_model
-        )
-        
+
+        final_model_name = self.model_router.resolve_model(capability=config.capability, runtime_override=runtime_model)
+
         llm = self.llm_factory.create(
             model_name=final_model_name,
             temperature=config.temperature,
             max_tokens=config.max_tokens,
-            llm_profile=config.llm_profile
+            llm_profile=config.llm_profile,
         )
 
         resolved_tools = self._resolve_dependencies(config)
         messages = build_messages(config, input_context)
-        
+
         target_schema = return_type if self._is_pydantic_model(return_type) else None
 
         if config.agent_type == AgentType.REACT:
-            return llm.invoke_agent_loop(
-                messages, 
-                resolved_tools, 
-                config.max_iterations, 
-                output_schema=target_schema
-            )
+            return llm.invoke_agent_loop(messages, resolved_tools, config.max_iterations, output_schema=target_schema)
         else:
             if target_schema:
                 return llm.invoke_structured(messages, resolved_tools, target_schema)
@@ -280,7 +267,8 @@ class DynamicAgentProxy:
             return "invoke"
 
         candidates = [
-            n for n, m in inspect.getmembers(agent.protocol_cls)
+            n
+            for n, m in inspect.getmembers(agent.protocol_cls)
             if not n.startswith("_") and (inspect.isfunction(m) or inspect.ismethod(m))
         ]
         if "invoke" in candidates:

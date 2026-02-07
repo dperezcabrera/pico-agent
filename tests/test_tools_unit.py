@@ -1,9 +1,10 @@
-import pytest
 from unittest.mock import MagicMock, Mock
+
+import pytest
 from pydantic import BaseModel
 
-from pico_agent.tools import ToolWrapper, AgentAsTool
 from pico_agent.config import ToolConfig
+from pico_agent.tools import AgentAsTool, ToolWrapper
 
 
 class TestToolWrapper:
@@ -12,6 +13,7 @@ class TestToolWrapper:
         class SimpleTool:
             def __call__(self, x: str) -> str:
                 return f"processed: {x}"
+
         return SimpleTool()
 
     @pytest.fixture
@@ -19,6 +21,7 @@ class TestToolWrapper:
         class RunTool:
             def run(self, data: str, count: int = 1) -> str:
                 return f"ran {count} times with {data}"
+
         return RunTool()
 
     @pytest.fixture
