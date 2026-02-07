@@ -19,10 +19,7 @@ def get_logger(name: str) -> logging.Logger:
     return logging.getLogger(name)
 
 
-def configure_logging(
-    level: int = logging.INFO,
-    handler: Optional[logging.Handler] = None
-) -> None:
+def configure_logging(level: int = logging.INFO, handler: Optional[logging.Handler] = None) -> None:
     """Configure logging for the pico_agent library.
 
     Args:

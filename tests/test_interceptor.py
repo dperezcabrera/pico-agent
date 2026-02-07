@@ -1,10 +1,11 @@
-import pytest
 from unittest.mock import MagicMock, Mock
 
+import pytest
+
+from pico_agent.config import AgentConfig
+from pico_agent.decorators import AGENT_META_KEY
 from pico_agent.interceptor import AgentInterceptor
 from pico_agent.proxy import TracedAgentProxy
-from pico_agent.decorators import AGENT_META_KEY
-from pico_agent.config import AgentConfig
 
 
 class MockMethodCtx:
@@ -78,11 +79,7 @@ class TestAgentInterceptor:
         config = AgentConfig(name="kwarg_agent", system_prompt="Test")
         setattr(AgentClass, AGENT_META_KEY, config)
 
-        ctx = MockMethodCtx(
-            AgentClass, "invoke",
-            args=(),
-            kwargs={"input": "kwarg input"}
-        )
+        ctx = MockMethodCtx(AgentClass, "invoke", args=(), kwargs={"input": "kwarg input"})
         call_next = MagicMock()
 
         interceptor.invoke(ctx, call_next)
@@ -96,11 +93,7 @@ class TestAgentInterceptor:
         config = AgentConfig(name="message_agent", system_prompt="Test")
         setattr(AgentClass, AGENT_META_KEY, config)
 
-        ctx = MockMethodCtx(
-            AgentClass, "invoke",
-            args=(),
-            kwargs={"message": "message input"}
-        )
+        ctx = MockMethodCtx(AgentClass, "invoke", args=(), kwargs={"message": "message input"})
         call_next = MagicMock()
 
         interceptor.invoke(ctx, call_next)
@@ -123,17 +116,14 @@ class TestAgentInterceptor:
 
     def test_priority_args_over_kwargs(self, interceptor, mock_proxy):
         """Args should take precedence over kwargs for input."""
+
         class AgentClass:
             pass
 
         config = AgentConfig(name="priority_agent", system_prompt="Test")
         setattr(AgentClass, AGENT_META_KEY, config)
 
-        ctx = MockMethodCtx(
-            AgentClass, "invoke",
-            args=("args_input",),
-            kwargs={"input": "kwargs_input"}
-        )
+        ctx = MockMethodCtx(AgentClass, "invoke", args=("args_input",), kwargs={"input": "kwargs_input"})
         call_next = MagicMock()
 
         interceptor.invoke(ctx, call_next)
@@ -143,14 +133,12 @@ class TestAgentInterceptor:
 
 
 class TestAgentInterceptorIntegration:
-    def test_interceptor_with_real_proxy(
-        self, mock_llm_factory, config_service, tool_registry, model_router
-    ):
+    def test_interceptor_with_real_proxy(self, mock_llm_factory, config_service, tool_registry, model_router):
         proxy = TracedAgentProxy(
             config_service=config_service,
             tool_registry=tool_registry,
             llm_factory=mock_llm_factory,
-            model_router=model_router
+            model_router=model_router,
         )
 
         interceptor = AgentInterceptor(proxy)

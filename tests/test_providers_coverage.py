@@ -1,9 +1,12 @@
 """Tests for providers.py to improve coverage."""
+
+from unittest.mock import MagicMock, PropertyMock, patch
+
 import pytest
-from unittest.mock import MagicMock, patch, PropertyMock
-from pico_agent.providers import LangChainAdapter, LangChainLLMFactory
+
 from pico_agent.config import LLMConfig
 from pico_agent.exceptions import AgentConfigurationError
+from pico_agent.providers import LangChainAdapter, LangChainLLMFactory
 
 
 class TestLangChainAdapter:
@@ -102,9 +105,7 @@ class TestLangChainAdapter:
         class OutputSchema:
             pass
 
-        result = adapter.invoke_structured(
-            [{"role": "user", "content": "hi"}], [], OutputSchema
-        )
+        result = adapter.invoke_structured([{"role": "user", "content": "hi"}], [], OutputSchema)
 
         mock_model.with_structured_output.assert_called_once_with(OutputSchema)
         assert result == {"key": "value"}

@@ -1,14 +1,17 @@
 import time
 import uuid
-from typing import Dict, Any, Optional, List
 from contextvars import ContextVar
-from dataclasses import dataclass, field, asdict
-from pico_ioc import component, cleanup
+from dataclasses import asdict, dataclass, field
+from typing import Any, Dict, List, Optional
+
+from pico_ioc import cleanup, component
+
 from .logging import get_logger
 
 logger = get_logger(__name__)
 
 run_context = ContextVar("run_context", default=None)
+
 
 @dataclass
 class TraceRun:
@@ -23,6 +26,7 @@ class TraceRun:
     error: Optional[str] = None
     extra: Dict[str, Any] = field(default_factory=dict)
 
+
 @component(scope="singleton")
 class TraceService:
     def __init__(self):
@@ -31,16 +35,9 @@ class TraceService:
     def start_run(self, name: str, run_type: str, inputs: Dict[str, Any], extra: Dict[str, Any] = None) -> str:
         parent_id = run_context.get()
         run_id = str(uuid.uuid4())
-        
-        run = TraceRun(
-            id=run_id,
-            name=name,
-            run_type=run_type,
-            inputs=inputs,
-            parent_id=parent_id,
-            extra=extra or {}
-        )
-        
+
+        run = TraceRun(id=run_id, name=name, run_type=run_type, inputs=inputs, parent_id=parent_id, extra=extra or {})
+
         self.traces.append(run)
         run_context.set(run_id)
         return run_id
@@ -60,7 +57,7 @@ class TraceService:
                         run.outputs = outputs
                     else:
                         run.outputs = {"output": str(outputs)}
-                
+
                 run_context.set(run.parent_id)
                 self._persist(run)
                 break

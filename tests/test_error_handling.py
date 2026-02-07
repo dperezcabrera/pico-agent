@@ -1,11 +1,12 @@
-import pytest
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from pico_agent.config import AgentConfig, LLMConfig
-from pico_agent.exceptions import AgentError, AgentDisabledError, AgentConfigurationError
-from pico_agent.proxy import DynamicAgentProxy
+from pico_agent.exceptions import AgentConfigurationError, AgentDisabledError, AgentError
 from pico_agent.providers import LangChainLLMFactory
-from pico_agent.registry import AgentConfigService, ToolRegistry, LocalAgentRegistry
+from pico_agent.proxy import DynamicAgentProxy
+from pico_agent.registry import AgentConfigService, LocalAgentRegistry, ToolRegistry
 from pico_agent.router import ModelRouter
 from pico_agent.tracing import TraceService
 
@@ -32,9 +33,7 @@ class TestProxyErrorHandling:
         # Create a fresh local registry for each test
         local_registry = LocalAgentRegistry()
         local_registry.register(
-            sample_agent_config.name,
-            type("TestProtocol", (), {"invoke": lambda self, x: x}),
-            sample_agent_config
+            sample_agent_config.name, type("TestProtocol", (), {"invoke": lambda self, x: x}), sample_agent_config
         )
         config_service = AgentConfigService(mock_central_client, local_registry)
         tool_registry = ToolRegistry()
@@ -49,7 +48,7 @@ class TestProxyErrorHandling:
             llm_factory=mock_llm_factory,
             model_router=model_router,
             container=container,
-            locator=None
+            locator=None,
         )
         return proxy, mock_llm_factory, tracer
 
@@ -127,29 +126,24 @@ class TestProviderErrorHandling:
 class TestChildAgentErrorHandling:
     """Test that child agent resolution logs errors appropriately."""
 
-    def test_disabled_child_agent_is_skipped(
-        self, mock_llm_factory, mock_central_client, sample_agent_config
-    ):
+    def test_disabled_child_agent_is_skipped(self, mock_llm_factory, mock_central_client, sample_agent_config):
         # Setup a parent agent that references a disabled child
         local_registry = LocalAgentRegistry()
 
-        parent_config = AgentConfig(
-            name="parent_agent",
-            system_prompt="Parent",
-            agents=["child_agent"],
-            enabled=True
-        )
+        parent_config = AgentConfig(name="parent_agent", system_prompt="Parent", agents=["child_agent"], enabled=True)
         child_config = AgentConfig(
             name="child_agent",
             system_prompt="Child",
-            enabled=False  # Disabled
+            enabled=False,  # Disabled
         )
 
         class ParentProtocol:
-            def invoke(self, x: str) -> str: pass
+            def invoke(self, x: str) -> str:
+                pass
 
         class ChildProtocol:
-            def invoke(self, x: str) -> str: pass
+            def invoke(self, x: str) -> str:
+                pass
 
         local_registry.register("parent_agent", ParentProtocol, parent_config)
         local_registry.register("child_agent", ChildProtocol, child_config)
@@ -173,30 +167,26 @@ class TestChildAgentErrorHandling:
             llm_factory=mock_llm_factory,
             model_router=model_router,
             container=container,
-            locator=mock_locator
+            locator=mock_locator,
         )
 
         # Should not raise, child should just be skipped
         tools = proxy._resolve_dependencies(parent_config)
 
         # Child should not be in tools since it's disabled
-        child_names = [getattr(t, 'name', None) for t in tools]
+        child_names = [getattr(t, "name", None) for t in tools]
         assert "child_agent" not in child_names
 
-    def test_invalid_child_agent_logs_warning(
-        self, mock_llm_factory, mock_central_client, sample_agent_config
-    ):
+    def test_invalid_child_agent_logs_warning(self, mock_llm_factory, mock_central_client, sample_agent_config):
         local_registry = LocalAgentRegistry()
 
         parent_config = AgentConfig(
-            name="parent_agent",
-            system_prompt="Parent",
-            agents=["nonexistent_agent"],
-            enabled=True
+            name="parent_agent", system_prompt="Parent", agents=["nonexistent_agent"], enabled=True
         )
 
         class ParentProtocol:
-            def invoke(self, x: str) -> str: pass
+            def invoke(self, x: str) -> str:
+                pass
 
         local_registry.register("parent_agent", ParentProtocol, parent_config)
 
@@ -217,7 +207,7 @@ class TestChildAgentErrorHandling:
             llm_factory=mock_llm_factory,
             model_router=model_router,
             container=container,
-            locator=mock_locator
+            locator=mock_locator,
         )
 
         # Should not raise, just log warning and continue
@@ -231,11 +221,7 @@ class TestTracingErrorHandling:
     def test_trace_service_records_error(self):
         tracer = TraceService()
 
-        run_id = tracer.start_run(
-            name="test_run",
-            run_type="test",
-            inputs={"key": "value"}
-        )
+        run_id = tracer.start_run(name="test_run", run_type="test", inputs={"key": "value"})
 
         error = ValueError("Something went wrong")
         tracer.end_run(run_id, error=error)
@@ -248,11 +234,7 @@ class TestTracingErrorHandling:
     def test_trace_service_records_success(self):
         tracer = TraceService()
 
-        run_id = tracer.start_run(
-            name="success_run",
-            run_type="test",
-            inputs={}
-        )
+        run_id = tracer.start_run(name="success_run", run_type="test", inputs={})
 
         tracer.end_run(run_id, outputs="Success!")
 

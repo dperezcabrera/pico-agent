@@ -30,7 +30,9 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
     "License :: OSI Approved :: MIT License",
-    "Operating System :: OS Independent"
+    "Operating System :: OS Independent",
+    "Intended Audience :: Developers",
+    "Typing :: Typed"
 ]
 
 dependencies = [
@@ -59,6 +61,8 @@ all = [
 Homepage = "https://github.com/dperezcabrera/pico-agent"
 Repository = "https://github.com/dperezcabrera/pico-agent"
 "Issue Tracker" = "https://github.com/dperezcabrera/pico-agent/issues"
+Documentation = "https://dperezcabrera.github.io/pico-agent/"
+Changelog = "https://github.com/dperezcabrera/pico-agent/blob/main/CHANGELOG.md"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
@@ -78,3 +82,18 @@ write_to_template = "__version__ = '{version}'\n"
 pico_agent = "pico_agent"
 
 [project.entry-points."pico_agent.plugins"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+ignore = ["E501", "E701", "E731", "F401", "F811", "UP006", "UP007", "UP035", "UP042", "UP045"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["F841"]
+
+[tool.ruff.format]
+quote-style = "double"

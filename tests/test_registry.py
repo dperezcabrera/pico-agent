@@ -1,8 +1,9 @@
-import pytest
 from unittest.mock import MagicMock
 
-from pico_agent.registry import ToolRegistry, LocalAgentRegistry, AgentConfigService
+import pytest
+
 from pico_agent.config import AgentConfig
+from pico_agent.registry import AgentConfigService, LocalAgentRegistry, ToolRegistry
 
 
 class TestToolRegistry:

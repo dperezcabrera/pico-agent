@@ -1,6 +1,7 @@
 import pytest
-from pico_agent.config import AgentConfig, AgentCapability
-from pico_agent.validation import AgentValidator, ValidationReport, ValidationIssue, Severity
+
+from pico_agent.config import AgentCapability, AgentConfig
+from pico_agent.validation import AgentValidator, Severity, ValidationIssue, ValidationReport
 
 
 class TestSeverity:
@@ -16,11 +17,7 @@ class TestSeverity:
 
 class TestValidationIssue:
     def test_create_issue(self):
-        issue = ValidationIssue(
-            field="name",
-            message="Name is required",
-            severity=Severity.ERROR
-        )
+        issue = ValidationIssue(field="name", message="Name is required", severity=Severity.ERROR)
         assert issue.field == "name"
         assert issue.message == "Name is required"
         assert issue.severity == Severity.ERROR
@@ -34,17 +31,13 @@ class TestValidationReport:
         assert report.has_errors is False
 
     def test_report_with_warnings_only(self):
-        issues = [
-            ValidationIssue("field1", "warning message", Severity.WARNING)
-        ]
+        issues = [ValidationIssue("field1", "warning message", Severity.WARNING)]
         report = ValidationReport(valid=True, issues=issues)
         assert report.valid is True
         assert report.has_errors is False
 
     def test_report_with_errors(self):
-        issues = [
-            ValidationIssue("field1", "error message", Severity.ERROR)
-        ]
+        issues = [ValidationIssue("field1", "error message", Severity.ERROR)]
         report = ValidationReport(valid=False, issues=issues)
         assert report.valid is False
         assert report.has_errors is True
@@ -96,18 +89,12 @@ class TestAgentValidator:
         config = AgentConfig(name="test", temperature=1.5, system_prompt="test")
         report = validator.validate(config)
         assert report.valid is True
-        assert any(
-            i.field == "temperature" and i.severity == Severity.WARNING
-            for i in report.issues
-        )
+        assert any(i.field == "temperature" and i.severity == Severity.WARNING for i in report.issues)
 
     def test_validate_empty_system_prompt_warning(self, validator):
         config = AgentConfig(name="test", system_prompt="")
         report = validator.validate(config)
-        assert any(
-            i.field == "system_prompt" and i.severity == Severity.WARNING
-            for i in report.issues
-        )
+        assert any(i.field == "system_prompt" and i.severity == Severity.WARNING for i in report.issues)
 
     def test_validate_missing_capability(self, validator):
         config = AgentConfig(name="test", capability="")
@@ -131,12 +118,7 @@ class TestAgentValidator:
 class TestValidatorIntegration:
     def test_multiple_issues_detected(self):
         validator = AgentValidator()
-        config = AgentConfig(
-            name="",
-            temperature=-1.0,
-            capability="",
-            system_prompt=""
-        )
+        config = AgentConfig(name="", temperature=-1.0, capability="", system_prompt="")
         report = validator.validate(config)
         assert report.valid is False
         assert len(report.issues) >= 2  # At least name and temperature errors

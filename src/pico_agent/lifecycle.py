@@ -1,8 +1,7 @@
-from enum import Enum
 from dataclasses import dataclass
+from enum import Enum
 
-from pico_ioc import component, configure, cleanup, PicoContainer
-from pico_ioc import Event, EventBus
+from pico_ioc import Event, EventBus, PicoContainer, cleanup, component, configure
 
 from .logging import get_logger
 

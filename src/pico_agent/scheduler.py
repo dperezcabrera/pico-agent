@@ -1,6 +1,8 @@
-import os
 import asyncio
+import os
+
 from pico_ioc import component
+
 
 @component(scope="singleton")
 class PlatformScheduler:
@@ -13,7 +15,7 @@ class PlatformScheduler:
 
     def release(self):
         self._semaphore.release()
-    
+
     @property
     def semaphore(self):
         return self._semaphore

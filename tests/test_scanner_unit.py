@@ -1,11 +1,12 @@
-import pytest
-from unittest.mock import MagicMock, Mock, patch
 from types import ModuleType
+from unittest.mock import MagicMock, Mock, patch
 
-from pico_agent.scanner import AgentScanner, ToolScanner
-from pico_agent.registry import LocalAgentRegistry, ToolRegistry
+import pytest
+
 from pico_agent.config import AgentConfig
-from pico_agent.decorators import IS_AGENT_INTERFACE, AGENT_META_KEY, TOOL_META_KEY
+from pico_agent.decorators import AGENT_META_KEY, IS_AGENT_INTERFACE, TOOL_META_KEY
+from pico_agent.registry import LocalAgentRegistry, ToolRegistry
+from pico_agent.scanner import AgentScanner, ToolScanner
 
 
 class TestAgentScanner:
@@ -148,23 +149,26 @@ class TestScannerInfrastructureDetection:
     def tool_scanner(self, tool_registry):
         return ToolScanner(tool_registry)
 
-    @pytest.mark.parametrize("module_name,expected", [
-        ("pico_ioc", True),
-        ("pico_ioc.container", True),
-        ("pico_agent", True),
-        ("pico_agent.proxy", True),
-        ("importlib", True),
-        ("importlib.util", True),
-        ("contextlib", True),
-        ("pytest", True),
-        ("_pytest", True),
-        ("_pytest.fixtures", True),
-        ("pluggy", True),
-        ("pluggy.hooks", True),
-        ("myapp", False),
-        ("myapp.agents", False),
-        ("business.services", False),
-    ])
+    @pytest.mark.parametrize(
+        "module_name,expected",
+        [
+            ("pico_ioc", True),
+            ("pico_ioc.container", True),
+            ("pico_agent", True),
+            ("pico_agent.proxy", True),
+            ("importlib", True),
+            ("importlib.util", True),
+            ("contextlib", True),
+            ("pytest", True),
+            ("_pytest", True),
+            ("_pytest.fixtures", True),
+            ("pluggy", True),
+            ("pluggy.hooks", True),
+            ("myapp", False),
+            ("myapp.agents", False),
+            ("business.services", False),
+        ],
+    )
     def test_infrastructure_detection(self, agent_scanner, tool_scanner, module_name, expected):
         assert agent_scanner._is_infrastructure(module_name) == expected
         assert tool_scanner._is_infrastructure(module_name) == expected

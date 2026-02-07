@@ -1,8 +1,11 @@
 """Tests for locator.py edge cases and coverage."""
-import pytest
+
 from unittest.mock import MagicMock, patch
-from pico_agent.locator import AgentLocator, NoOpCentralClient, AgentInfrastructureFactory
+
+import pytest
+
 from pico_agent.config import AgentConfig
+from pico_agent.locator import AgentInfrastructureFactory, AgentLocator, NoOpCentralClient
 
 
 class TestNoOpCentralClient:

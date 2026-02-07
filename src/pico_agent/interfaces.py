@@ -1,6 +1,7 @@
-from typing import Protocol, Any, List, Dict, Optional, Type, TypeVar, Awaitable
+from typing import Any, Awaitable, Dict, List, Optional, Protocol, Type, TypeVar
 
 T = TypeVar("T")
+
 
 class Agent(Protocol):
     def run(self, input: str) -> str: ...
@@ -8,14 +9,25 @@ class Agent(Protocol):
     def run_structured(self, input: str, schema: Type[T]) -> T: ...
     async def arun_structured(self, input: str, schema: Type[T]) -> T: ...
 
+
 class CentralConfigClient(Protocol):
     def get_agent_config(self, name: str) -> Optional[Any]: ...
     def upsert_agent_config(self, config: Any) -> None: ...
 
+
 class LLM(Protocol):
     def invoke(self, messages: List[Dict[str, str]], tools: List[Any]) -> str: ...
     def invoke_structured(self, messages: List[Dict[str, str]], tools: List[Any], output_schema: Type[Any]) -> Any: ...
-    def invoke_agent_loop(self, messages: List[Dict[str, str]], tools: List[Any], max_iterations: int, output_schema: Optional[Type[Any]] = None) -> Any: ...
+    def invoke_agent_loop(
+        self,
+        messages: List[Dict[str, str]],
+        tools: List[Any],
+        max_iterations: int,
+        output_schema: Optional[Type[Any]] = None,
+    ) -> Any: ...
+
 
 class LLMFactory(Protocol):
-    def create(self, model_name: str, temperature: float, max_tokens: Optional[int], llm_profile: Optional[str] = None) -> LLM: ...
+    def create(
+        self, model_name: str, temperature: float, max_tokens: Optional[int], llm_profile: Optional[str] = None
+    ) -> LLM: ...

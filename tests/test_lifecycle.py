@@ -1,8 +1,9 @@
-import pytest
 from unittest.mock import MagicMock, call
 
-from pico_ioc import init, EventBus, Event
-from pico_agent.lifecycle import AgentSystem, LifecyclePhase, LifecycleEvent
+import pytest
+from pico_ioc import Event, EventBus, init
+
+from pico_agent.lifecycle import AgentSystem, LifecycleEvent, LifecyclePhase
 
 
 class TestLifecyclePhase:

@@ -1,7 +1,10 @@
 from typing import Any, Callable
-from pico_ioc import component, MethodInterceptor, MethodCtx
-from .proxy import TracedAgentProxy
+
+from pico_ioc import MethodCtx, MethodInterceptor, component
+
 from .decorators import AGENT_META_KEY
+from .proxy import TracedAgentProxy
+
 
 @component
 class AgentInterceptor(MethodInterceptor):
@@ -10,7 +13,7 @@ class AgentInterceptor(MethodInterceptor):
 
     def invoke(self, ctx: MethodCtx, call_next: Callable[[MethodCtx], Any]) -> Any:
         config = getattr(ctx.cls, AGENT_META_KEY, None)
-        
+
         if not config or ctx.name != "invoke":
             return call_next(ctx)
 

@@ -1,18 +1,18 @@
 import os
 import sys
 import types
-import pytest
 
+import pytest
 from pico_ioc import PicoContainer
 
 import pico_agent
 from pico_agent.bootstrap import (
-    init,
-    _to_module_list,
-    _normalize_modules,
-    _import_module_like,
     _harvest_scanners,
+    _import_module_like,
     _load_plugin_modules,
+    _normalize_modules,
+    _to_module_list,
+    init,
 )
 
 
@@ -101,6 +101,7 @@ class TestInit:
 
     def test_pico_agent_always_included(self):
         from pico_agent.lifecycle import AgentSystem
+
         container = init(modules=["os"])
         assert container.has(AgentSystem)
 

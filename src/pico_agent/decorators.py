@@ -1,9 +1,11 @@
-from typing import List, Optional, Callable, Type
-from .config import AgentConfig, AgentType, AgentCapability, ToolConfig
+from typing import Callable, List, Optional, Type
+
+from .config import AgentCapability, AgentConfig, AgentType, ToolConfig
 
 AGENT_META_KEY = "_pico_agent_meta"
 TOOL_META_KEY = "_pico_tool_meta"
 IS_AGENT_INTERFACE = "_pico_is_agent_interface"
+
 
 def agent(
     name: str,
@@ -18,13 +20,13 @@ def agent(
     tags: Optional[List[str]] = None,
     tracing_enabled: bool = True,
     temperature: float = 0.7,
-    llm_profile: Optional[str] = None
+    llm_profile: Optional[str] = None,
 ) -> Callable[[Type], Type]:
 
     def decorator(cls_or_proto: Type) -> Type:
         final_desc = description
         if not final_desc and cls_or_proto.__doc__:
-            final_desc = cls_or_proto.__doc__.strip().split('\n')[0]
+            final_desc = cls_or_proto.__doc__.strip().split("\n")[0]
 
         default_config = AgentConfig(
             name=name,
@@ -39,7 +41,7 @@ def agent(
             tags=tags or [],
             tracing_enabled=tracing_enabled,
             temperature=temperature,
-            llm_profile=llm_profile
+            llm_profile=llm_profile,
         )
 
         setattr(cls_or_proto, AGENT_META_KEY, default_config)
@@ -48,9 +50,11 @@ def agent(
 
     return decorator
 
+
 def tool(name: str, description: str) -> Callable[[Type], Type]:
     def decorator(cls: Type) -> Type:
         config = ToolConfig(name=name, description=description)
         setattr(cls, TOOL_META_KEY, config)
         return cls
+
     return decorator
