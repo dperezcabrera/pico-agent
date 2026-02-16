@@ -6,7 +6,7 @@ import pytest
 from pico_agent.config import AgentConfig
 from pico_agent.decorators import AGENT_META_KEY, IS_AGENT_INTERFACE, TOOL_META_KEY
 from pico_agent.registry import LocalAgentRegistry, ToolRegistry
-from pico_agent.scanner import AgentScanner, ToolScanner
+from pico_agent.scanner import AgentScanner, ToolScanner, _is_infrastructure
 
 
 class TestAgentScanner:
@@ -14,19 +14,19 @@ class TestAgentScanner:
     def scanner(self, local_registry):
         return AgentScanner(local_registry)
 
-    def test_is_infrastructure_pico_ioc(self, scanner):
-        assert scanner._is_infrastructure("pico_ioc.container") is True
+    def test_is_infrastructure_pico_ioc(self):
+        assert _is_infrastructure("pico_ioc.container") is True
 
-    def test_is_infrastructure_pico_agent(self, scanner):
-        assert scanner._is_infrastructure("pico_agent.proxy") is True
+    def test_is_infrastructure_pico_agent(self):
+        assert _is_infrastructure("pico_agent.proxy") is True
 
-    def test_is_infrastructure_pytest(self, scanner):
-        assert scanner._is_infrastructure("pytest") is True
-        assert scanner._is_infrastructure("_pytest.fixtures") is True
+    def test_is_infrastructure_pytest(self):
+        assert _is_infrastructure("pytest") is True
+        assert _is_infrastructure("_pytest.fixtures") is True
 
-    def test_is_infrastructure_user_module(self, scanner):
-        assert scanner._is_infrastructure("my_app.agents") is False
-        assert scanner._is_infrastructure("business.logic") is False
+    def test_is_infrastructure_user_module(self):
+        assert _is_infrastructure("my_app.agents") is False
+        assert _is_infrastructure("business.logic") is False
 
     def test_scan_module_skips_already_scanned(self, scanner, local_registry):
         module = ModuleType("test_module_1")
@@ -85,14 +85,14 @@ class TestToolScanner:
     def scanner(self, tool_registry):
         return ToolScanner(tool_registry)
 
-    def test_is_infrastructure_pico_ioc(self, scanner):
-        assert scanner._is_infrastructure("pico_ioc.container") is True
+    def test_is_infrastructure_pico_ioc(self):
+        assert _is_infrastructure("pico_ioc.container") is True
 
-    def test_is_infrastructure_pico_agent(self, scanner):
-        assert scanner._is_infrastructure("pico_agent.tools") is True
+    def test_is_infrastructure_pico_agent(self):
+        assert _is_infrastructure("pico_agent.tools") is True
 
-    def test_is_infrastructure_user_module(self, scanner):
-        assert scanner._is_infrastructure("my_app.tools") is False
+    def test_is_infrastructure_user_module(self):
+        assert _is_infrastructure("my_app.tools") is False
 
     def test_scan_module_skips_already_scanned(self, scanner):
         module = ModuleType("tools_module")
@@ -141,14 +141,6 @@ class TestToolScanner:
 class TestScannerInfrastructureDetection:
     """Test that scanners correctly identify infrastructure modules."""
 
-    @pytest.fixture
-    def agent_scanner(self, local_registry):
-        return AgentScanner(local_registry)
-
-    @pytest.fixture
-    def tool_scanner(self, tool_registry):
-        return ToolScanner(tool_registry)
-
     @pytest.mark.parametrize(
         "module_name,expected",
         [
@@ -169,6 +161,5 @@ class TestScannerInfrastructureDetection:
             ("business.services", False),
         ],
     )
-    def test_infrastructure_detection(self, agent_scanner, tool_scanner, module_name, expected):
-        assert agent_scanner._is_infrastructure(module_name) == expected
-        assert tool_scanner._is_infrastructure(module_name) == expected
+    def test_infrastructure_detection(self, module_name, expected):
+        assert _is_infrastructure(module_name) == expected

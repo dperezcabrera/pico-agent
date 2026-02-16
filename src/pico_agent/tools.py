@@ -9,13 +9,29 @@ from .logging import get_logger
 logger = get_logger(__name__)
 
 
+def _create_schema_from_sig(name: str, func_or_method: Any) -> Type[BaseModel]:
+    """Build a Pydantic model from the signature of *func_or_method*."""
+    sig = inspect.signature(func_or_method)
+    type_hints = get_type_hints(func_or_method)
+
+    fields = {}
+    for param_name, param in sig.parameters.items():
+        if param_name == "self":
+            continue
+        annotation = type_hints.get(param_name, str)
+        default = param.default if param.default is not inspect.Parameter.empty else ...
+        fields[param_name] = (annotation, default)
+
+    return create_model(f"{name}Input", **fields)
+
+
 class ToolWrapper:
     def __init__(self, instance: Any, config: ToolConfig):
         self.instance = instance
         self.name = config.name
         self.description = config.description
         self.func = self._resolve_function(instance)
-        self.args_schema = self._create_schema_from_sig(self.func)
+        self.args_schema = _create_schema_from_sig(self.name, self.func)
 
     def _resolve_function(self, instance: Any) -> Any:
         if hasattr(instance, "__call__"):
@@ -26,20 +42,6 @@ class ToolWrapper:
                 return getattr(instance, method)
 
         raise ValueError(f"Tool {self.name} must implement __call__, run, execute, or invoke.")
-
-    def _create_schema_from_sig(self, func: Any) -> Type[BaseModel]:
-        sig = inspect.signature(func)
-        type_hints = get_type_hints(func)
-
-        fields = {}
-        for param_name, param in sig.parameters.items():
-            if param_name == "self":
-                continue
-            annotation = type_hints.get(param_name, str)
-            default = param.default if param.default is not inspect.Parameter.empty else ...
-            fields[param_name] = (annotation, default)
-
-        return create_model(f"{self.name}Input", **fields)
 
     def __call__(self, **kwargs):
         return self.func(**kwargs)
@@ -66,23 +68,9 @@ class AgentAsTool:
             else:
                 self.description = f"Agent {self.name}"
 
-        self.args_schema = self._create_schema_from_sig()
-
-    def _create_schema_from_sig(self) -> Type[BaseModel]:
         protocol_cls = self.proxy.protocol_cls
         real_method = getattr(protocol_cls, self.method_name)
-        sig = inspect.signature(real_method)
-        type_hints = get_type_hints(real_method)
-
-        fields = {}
-        for param_name, param in sig.parameters.items():
-            if param_name == "self":
-                continue
-            annotation = type_hints.get(param_name, str)
-            default = param.default if param.default is not inspect.Parameter.empty else ...
-            fields[param_name] = (annotation, default)
-
-        return create_model(f"{self.name}Input", **fields)
+        self.args_schema = _create_schema_from_sig(self.name, real_method)
 
     def __call__(self, **kwargs):
         return self._func(**kwargs)
