@@ -112,12 +112,14 @@ class DynamicAgentProxy:
 
         params = list(method_sig.parameters.values())
         if params and params[0].name == "self":
-            new_params = params[1:]
-            method_sig = method_sig.replace(parameters=new_params)
+            method_sig = method_sig.replace(parameters=params[1:])
 
         type_hints = get_type_hints(method_ref)
         return_type = type_hints.get("return", str)
 
+        return self._create_method_wrapper(method_ref, method_sig, return_type)
+
+    def _create_method_wrapper(self, method_ref, method_sig, return_type):
         def method_wrapper(*args, **kwargs):
             input_context = self._extract_input_context(method_sig, args, kwargs)
             runtime_model = kwargs.pop("model", kwargs.pop("_model", None))
@@ -129,9 +131,7 @@ class DynamicAgentProxy:
                 )
 
             try:
-                is_async = inspect.iscoroutinefunction(method_ref)
-
-                if is_async:
+                if inspect.iscoroutinefunction(method_ref):
 
                     async def async_inner():
                         result = await self._execute_async(input_context, return_type, runtime_model)
