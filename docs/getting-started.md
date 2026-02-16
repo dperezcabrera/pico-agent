@@ -21,20 +21,19 @@ pip install pico-agent[all]         # All providers
 
 ### 1. Configure LLM credentials
 
-API keys are configured via `LLMConfig`, provided by a `@factory` in your application:
+Pico-Agent registers a default `LLMConfig` singleton automatically. Use `@configure` to populate it with your API keys:
 
 ```python
-from pico_ioc import factory, provides
+import os
+from pico_ioc import component, configure
 from pico_agent import LLMConfig
 
-@factory
-class LLMConfigFactory:
-    @provides(LLMConfig)
-    def create(self) -> LLMConfig:
-        return LLMConfig(
-            api_keys={"openai": "sk-..."},
-            base_urls={}
-        )
+@component
+class AppConfig:
+    @configure
+    def setup_llm(self, config: LLMConfig):
+        config.api_keys["openai"] = os.getenv("OPENAI_API_KEY")
+        config.api_keys["google"] = os.getenv("GOOGLE_API_KEY")
 ```
 
 ### 2. Define tools
@@ -89,15 +88,24 @@ Key `@agent` parameters:
 
 ### 4. Initialize and use
 
-```python
-from pico_ioc import init, configuration, DictSource
+Use `pico_agent.init()` — it wraps `pico_ioc.init()` and automatically includes the `pico_agent` module:
 
-config = configuration(DictSource({}))
-container = init(modules=["myapp"], config=config)
+```python
+from pico_agent import init
+
+container = init(modules=["myapp"])
 
 agent = container.get(ResearchAgent)
 result = await agent.research("Latest developments in quantum computing")
 print(result)
+```
+
+You can also use `pico_ioc.init()` directly — just include `"pico_agent"` in your modules list:
+
+```python
+from pico_ioc import init
+
+container = init(modules=["pico_agent", "myapp"])
 ```
 
 ## Multi-Agent Orchestration
