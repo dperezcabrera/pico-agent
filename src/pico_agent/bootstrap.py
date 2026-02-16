@@ -1,3 +1,10 @@
+"""Bootstrap helper that wraps ``pico_ioc.init()`` with pico-agent defaults.
+
+The ``init()`` function automatically prepends the ``pico_agent`` module,
+loads plugin modules from the ``pico_agent.plugins`` entry point group, and
+harvests any ``PICO_SCANNERS`` declarations from user modules.
+"""
+
 import inspect
 import os
 from importlib import import_module
@@ -86,6 +93,26 @@ def _load_plugin_modules(group: str = "pico_agent.plugins") -> List[ModuleType]:
 
 
 def init(*args: Any, **kwargs: Any) -> "PicoContainer":
+    """Initialise a pico-ioc container with pico-agent infrastructure.
+
+    Wraps ``pico_ioc.init()`` and:
+
+    1. Prepends the ``pico_agent`` module to the module list.
+    2. Loads plugin modules from the ``pico_agent.plugins`` entry point group
+       (disable with ``PICO_AGENT_AUTO_PLUGINS=false``).
+    3. Harvests ``PICO_SCANNERS`` from all modules and adds them as custom
+       scanners.
+
+    All positional and keyword arguments are forwarded to
+    ``pico_ioc.init()``.
+
+    Returns:
+        A fully configured ``PicoContainer``.
+
+    Example:
+        >>> from pico_agent import init
+        >>> container = init(modules=["myapp"])
+    """
     bound = _IOC_INIT_SIG.bind(*args, **kwargs)
     bound.apply_defaults()
 

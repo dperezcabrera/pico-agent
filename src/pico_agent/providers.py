@@ -1,3 +1,11 @@
+"""LangChain-based LLM adapter and multi-provider factory.
+
+``LangChainAdapter`` implements the ``LLM`` protocol by delegating to a
+LangChain ``BaseChatModel``.  ``LangChainLLMFactory`` implements the
+``LLMFactory`` protocol and creates adapters for OpenAI, Azure, Anthropic,
+Google/Gemini, DeepSeek, and Qwen providers.
+"""
+
 from typing import Any, Dict, List, Optional, Type
 
 from langchain_core.language_models.chat_models import BaseChatModel
@@ -12,12 +20,32 @@ logger = get_logger(__name__)
 
 
 class LangChainAdapter(LLM):
+    """Adapts a LangChain ``BaseChatModel`` to the pico-agent ``LLM`` protocol.
+
+    Handles message conversion, tool binding, structured output, and the
+    ReAct agent loop via LangGraph.  Optionally records traces through
+    ``TraceService``.
+
+    Args:
+        chat_model: A LangChain chat model instance.
+        tracer: Optional ``TraceService`` for recording LLM invocations.
+        model_name: Human-readable model identifier used in trace names.
+    """
+
     def __init__(self, chat_model: BaseChatModel, tracer: Any = None, model_name: str = ""):
         self.model = chat_model
         self.tracer = tracer
         self.model_name = model_name
 
     def _convert_messages(self, messages: List[Dict[str, str]]) -> List[BaseMessage]:
+        """Convert pico-agent message dicts to LangChain ``BaseMessage`` objects.
+
+        Args:
+            messages: List of dicts with ``"role"`` and ``"content"`` keys.
+
+        Returns:
+            List of ``SystemMessage``, ``HumanMessage``, or ``AIMessage``.
+        """
         lc_messages = []
         for msg in messages:
             if msg["role"] == "system":
@@ -48,6 +76,16 @@ class LangChainAdapter(LLM):
             raise
 
     def invoke(self, messages: List[Dict[str, str]], tools: List[Any]) -> str:
+        """Send messages to the LLM and return the text response.
+
+        Args:
+            messages: List of message dicts with ``"role"`` and ``"content"``.
+            tools: LangChain-compatible tool instances to bind.
+
+        Returns:
+            The model's text response.
+        """
+
         def _exec():
             lc_messages = self._convert_messages(messages)
             model_with_tools = self.model
@@ -59,6 +97,17 @@ class LangChainAdapter(LLM):
         return self._trace("invoke", messages, _exec)
 
     def invoke_structured(self, messages: List[Dict[str, str]], tools: List[Any], output_schema: Type[Any]) -> Any:
+        """Send messages and parse the response into a Pydantic model.
+
+        Args:
+            messages: List of message dicts.
+            tools: LangChain-compatible tool instances.
+            output_schema: A ``pydantic.BaseModel`` subclass.
+
+        Returns:
+            An instance of *output_schema* populated from the LLM response.
+        """
+
         def _exec():
             lc_messages = self._convert_messages(messages)
             structured_model = self.model.with_structured_output(output_schema)
@@ -73,6 +122,18 @@ class LangChainAdapter(LLM):
         max_iterations: int,
         output_schema: Optional[Type[Any]] = None,
     ) -> Any:
+        """Run a ReAct-style tool loop via LangGraph.
+
+        Args:
+            messages: List of message dicts.
+            tools: LangChain-compatible tool instances.
+            max_iterations: Maximum reasoning iterations (``recursion_limit``).
+            output_schema: Optional Pydantic model for structured final output.
+
+        Returns:
+            The final text response, or an *output_schema* instance if provided.
+        """
+
         def _exec():
             from langgraph.prebuilt import create_react_agent
 
@@ -91,6 +152,23 @@ class LangChainAdapter(LLM):
 
 
 class LangChainLLMFactory(LLMFactory):
+    """Multi-provider LLM factory backed by LangChain chat model classes.
+
+    Supports OpenAI, Azure, Anthropic (Claude), Google (Gemini), DeepSeek,
+    and Qwen.  Provider detection is automatic based on the model name, or
+    explicit via the ``"provider:model"`` syntax (e.g., ``"openai:gpt-5-mini"``).
+
+    Args:
+        config: ``LLMConfig`` containing API keys and base URLs.
+        container: Optional ``PicoContainer`` used to resolve ``TraceService``.
+
+    Raises:
+        AgentConfigurationError: If the required API key is missing.
+        ImportError: If the required LangChain provider package is not
+            installed.
+        ValueError: If the provider name is unknown.
+    """
+
     def __init__(self, config: LLMConfig, container: Any = None):
         self.config = config
         self.container = container
@@ -98,6 +176,31 @@ class LangChainLLMFactory(LLMFactory):
     def create(
         self, model_name: str, temperature: float, max_tokens: Optional[int], llm_profile: Optional[str] = None
     ) -> LLM:
+        """Create a ``LangChainAdapter`` for the given model.
+
+        The provider is detected from the model name or specified explicitly
+        using the ``"provider:model"`` syntax.
+
+        Args:
+            model_name: Model identifier, optionally prefixed with provider
+                (e.g., ``"openai:gpt-5-mini"``).
+            temperature: Sampling temperature.
+            max_tokens: Maximum response tokens, or ``None``.
+            llm_profile: Named profile for API-key / base-URL selection.
+
+        Returns:
+            A configured ``LangChainAdapter`` instance.
+
+        Raises:
+            AgentConfigurationError: If the API key for the detected provider
+                is missing.  Message pattern:
+                ``"API Key not found for provider '<provider>' (Profile: '<profile>'). Please configure it via LLMConfig."``
+            ImportError: If the LangChain package for the provider is not
+                installed.  Message pattern:
+                ``"Please install 'pico-agent[<extra>]' to use <provider>."``
+            ValueError: If the provider name is not recognised.  Message:
+                ``"Unknown LLM Provider: <provider>"``
+        """
         final_provider = None
         real_model_name = model_name
 
@@ -146,6 +249,23 @@ class LangChainLLMFactory(LLMFactory):
         return self.config.base_urls.get(provider, default)
 
     def _detect_provider(self, model_name: str) -> str:
+        """Auto-detect the LLM provider from a model name.
+
+        Detection rules (first match wins):
+
+        - Contains ``"gemini"`` -> ``"gemini"``
+        - Contains ``"claude"`` or ``"anthropic"`` -> ``"claude"``
+        - Contains ``"deepseek"`` -> ``"deepseek"``
+        - Contains ``"qwen"`` -> ``"qwen"``
+        - Contains ``"azure"`` -> ``"azure"``
+        - Otherwise -> ``"openai"``
+
+        Args:
+            model_name: The model identifier to inspect.
+
+        Returns:
+            A provider key string.
+        """
         name_lower = model_name.lower()
         if "gemini" in name_lower:
             return "gemini"
@@ -253,6 +373,21 @@ class LangChainLLMFactory(LLMFactory):
             raise ImportError("Please install 'pico-agent[openai]' to use Qwen.")
 
     def create_chat_model(self, provider: str, model_name: str, profile: Optional[str]) -> BaseChatModel:
+        """Create a LangChain ``BaseChatModel`` for the specified provider.
+
+        Args:
+            provider: Provider key (``"openai"``, ``"azure"``, ``"gemini"``,
+                ``"google"``, ``"claude"``, ``"anthropic"``, ``"deepseek"``,
+                ``"qwen"``).
+            model_name: The provider-specific model name.
+            profile: Optional named profile for API key / base URL.
+
+        Returns:
+            A configured ``BaseChatModel`` instance.
+
+        Raises:
+            ValueError: If *provider* is not recognised.
+        """
         provider_lower = provider.lower()
         timeout = 60
 

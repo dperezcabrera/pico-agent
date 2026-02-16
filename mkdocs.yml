@@ -127,5 +127,9 @@ nav:
   - Home: index.md
   - Getting Started: getting-started.md
   - Architecture: architecture.md
+  - How-To Guides:
+    - Custom Tools: how-to/custom-tools.md
+    - Testing Agents: how-to/testing.md
+    - Multiple Providers: how-to/multi-provider.md
   - Claude Code Skills: skills.md
   - FAQ: faq.md

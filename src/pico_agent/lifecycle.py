@@ -1,3 +1,9 @@
+"""Agent system lifecycle management.
+
+``AgentSystem`` tracks the framework's lifecycle phases and publishes
+``LifecycleEvent`` notifications via pico-ioc's ``EventBus``.
+"""
+
 from dataclasses import dataclass
 from enum import Enum
 
@@ -9,6 +15,17 @@ logger = get_logger(__name__)
 
 
 class LifecyclePhase(str, Enum):
+    """Phases of the pico-agent system lifecycle.
+
+    Attributes:
+        INITIALIZING: Container is being built.
+        SCANNING: Agents and tools are being discovered.
+        READY: Container is fully configured.
+        RUNNING: System is accepting requests.
+        SHUTTING_DOWN: Graceful shutdown in progress.
+        STOPPED: System has stopped.
+    """
+
     INITIALIZING = "initializing"
     SCANNING = "scanning"
     READY = "ready"
@@ -19,13 +36,25 @@ class LifecyclePhase(str, Enum):
 
 @dataclass
 class LifecycleEvent(Event):
+    """Event published when the system transitions between lifecycle phases.
+
+    Args:
+        phase: The new ``LifecyclePhase``.
+        detail: Optional human-readable detail string.
+    """
+
     phase: LifecyclePhase
     detail: str = ""
 
 
 @component(scope="singleton")
 class AgentSystem:
-    """Lifecycle coordinator — publishes transitions via EventBus de pico-ioc."""
+    """Lifecycle coordinator that publishes phase transitions via ``EventBus``.
+
+    Transitions are published as ``LifecycleEvent`` instances.  The system
+    moves through: ``INITIALIZING`` -> ``READY`` -> ``RUNNING`` ->
+    ``SHUTTING_DOWN`` -> ``STOPPED``.
+    """
 
     def __init__(self):
         self._phase = LifecyclePhase.INITIALIZING
@@ -33,6 +62,7 @@ class AgentSystem:
 
     @property
     def phase(self) -> LifecyclePhase:
+        """The current lifecycle phase."""
         return self._phase
 
     def _transition(self, phase: LifecyclePhase, detail: str = ""):

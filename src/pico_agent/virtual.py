@@ -1,3 +1,11 @@
+"""Virtual (config-only) agents and the map-reduce workflow engine.
+
+``VirtualAgentRunner`` executes agent configurations that have no
+corresponding Protocol class (e.g., agents defined via YAML or created at
+runtime with ``VirtualAgentManager``).  ``VirtualAgentManager`` is a
+component that creates and retrieves virtual agents programmatically.
+"""
+
 import asyncio
 import operator
 from typing import Annotated, Any, Dict, List, Protocol, Type, TypedDict, TypeVar
@@ -20,22 +28,90 @@ T = TypeVar("T")
 
 
 class VirtualAgent(Protocol):
-    def run(self, input: str) -> str: ...
-    async def arun(self, input: str) -> str: ...
-    def run_structured(self, input: str, schema: Type[T]) -> T: ...
-    def run_with_args(self, args: Dict[str, Any]) -> str: ...
+    """Protocol for virtual agents (config-only, no Protocol class).
+
+    Both ``VirtualAgentRunner`` and dynamically created agents conform to
+    this interface.
+    """
+
+    def run(self, input: str) -> str:
+        """Execute the agent synchronously.
+
+        Args:
+            input: The user message.
+
+        Returns:
+            The agent's text response.
+        """
+        ...
+
+    async def arun(self, input: str) -> str:
+        """Execute the agent asynchronously.
+
+        Args:
+            input: The user message.
+
+        Returns:
+            The agent's text response.
+        """
+        ...
+
+    def run_structured(self, input: str, schema: Type[T]) -> T:
+        """Execute the agent and parse the response into a Pydantic model.
+
+        Args:
+            input: The user message.
+            schema: A ``pydantic.BaseModel`` subclass.
+
+        Returns:
+            An instance of *schema*.
+        """
+        ...
+
+    def run_with_args(self, args: Dict[str, Any]) -> str:
+        """Execute the agent with a dictionary of arguments.
+
+        Args:
+            args: Key-value pairs used to fill prompt templates.
+
+        Returns:
+            The agent's text response.
+        """
+        ...
 
 
 class TaskItem(BaseModel):
+    """A single work item produced by the splitter in a map-reduce workflow.
+
+    Attributes:
+        worker_type: Key used to select a mapper agent from ``mappers`` config.
+        arguments: Structured arguments forwarded to the mapper agent.
+    """
+
     worker_type: str = Field(description="The type of worker agent to handle this task")
     arguments: Dict[str, Any] = Field(description="The structured arguments/payload for the worker")
 
 
 class SplitterOutput(BaseModel):
+    """Structured output expected from the splitter agent in a map-reduce workflow.
+
+    Attributes:
+        tasks: The list of ``TaskItem`` objects to distribute to mappers.
+    """
+
     tasks: List[TaskItem] = Field(description="The list of tasks to be distributed")
 
 
 class MapReduceState(TypedDict):
+    """LangGraph state for the map-reduce workflow.
+
+    Attributes:
+        input: The original user input.
+        tasks: Tasks produced by the splitter.
+        mapped_results: Accumulated results from mapper agents (additive).
+        final_output: The reducer agent's final combined output.
+    """
+
     input: str
     tasks: List[TaskItem]
     mapped_results: Annotated[List[str], operator.add]
@@ -43,6 +119,21 @@ class MapReduceState(TypedDict):
 
 
 class VirtualAgentRunner:
+    """Executes agent configurations without a Protocol class.
+
+    Supports ``ONE_SHOT``, ``REACT``, and ``WORKFLOW`` (map-reduce) agent
+    types.  Created by ``AgentLocator`` for agents that exist only as
+    configuration (e.g., YAML-defined or runtime-created agents).
+
+    Args:
+        config: The agent's ``AgentConfig``.
+        tool_registry: Registry for tool lookup.
+        llm_factory: Factory for creating LLM instances.
+        model_router: Capability-to-model router.
+        container: The pico-ioc container.
+        locator: ``AgentLocator`` for resolving child agents.
+        scheduler: Concurrency scheduler for async map-reduce.
+    """
     def __init__(
         self,
         config: AgentConfig,
@@ -71,15 +162,48 @@ class VirtualAgentRunner:
         )
 
     def run(self, input: str) -> str:
+        """Execute the agent synchronously.
+
+        Args:
+            input: The user message.
+
+        Returns:
+            The agent's text response.
+        """
         return self.run_with_args({"input": input})
 
     async def arun(self, input: str) -> str:
+        """Execute the agent asynchronously.
+
+        For ``WORKFLOW`` agents, runs the async workflow directly.  For
+        other types, delegates to ``asyncio.to_thread``.
+
+        Args:
+            input: The user message.
+
+        Returns:
+            The agent's text response.
+        """
         if self.config.agent_type == AgentType.WORKFLOW:
             return await self._arun_workflow({"input": input})
 
         return await asyncio.to_thread(self.run, input)
 
     def run_with_args(self, args: Dict[str, Any]) -> str:
+        """Execute the agent with a dictionary of arguments.
+
+        Args:
+            args: Key-value pairs used to fill prompt templates.
+
+        Returns:
+            The agent's text response, or ``"Agent is disabled."`` if the
+            agent is not enabled.
+
+        Raises:
+            RuntimeError: If a ``WORKFLOW`` agent is called synchronously
+                from within an already-running async event loop.  Message:
+                ``"Cannot call sync run() from inside an async loop. Use await agent.arun() instead."``
+        """
         if not self.config.enabled:
             return "Agent is disabled."
 
@@ -104,6 +228,18 @@ class VirtualAgentRunner:
             return llm.invoke(messages, resolved_tools)
 
     def run_structured(self, input: str, schema: Type[T]) -> T:
+        """Execute the agent and parse the response into a Pydantic model.
+
+        Args:
+            input: The user message.
+            schema: A ``pydantic.BaseModel`` subclass.
+
+        Returns:
+            An instance of *schema* populated from the LLM response.
+
+        Raises:
+            ValueError: If the agent is disabled.
+        """
         if not self.config.enabled:
             raise ValueError("Agent is disabled")
 
@@ -202,6 +338,29 @@ class VirtualAgentRunner:
 
 @component
 class VirtualAgentManager:
+    """Creates and manages virtual agents programmatically at runtime.
+
+    Virtual agents are config-only agents that do not require a Protocol
+    class.  Use ``create_agent()`` to define a new agent with inline
+    parameters, or ``get_agent()`` to retrieve an existing one.
+
+    Args:
+        config_service: Service for storing runtime agent configurations.
+        tool_registry: Registry for tool lookup.
+        llm_factory: Factory for creating LLM instances.
+        model_router: Capability-to-model router.
+        container: The pico-ioc container.
+        scheduler: Concurrency scheduler for async operations.
+
+    Example:
+        >>> manager = container.get(VirtualAgentManager)
+        >>> agent = manager.create_agent(
+        ...     "greeter",
+        ...     system_prompt="You greet users warmly.",
+        ...     capability="fast",
+        ... )
+        >>> result = agent.run("Hello!")
+    """
     def __init__(
         self,
         config_service: AgentConfigService,
@@ -219,6 +378,17 @@ class VirtualAgentManager:
         self.scheduler = scheduler
 
     def create_agent(self, name: str, **kwargs) -> VirtualAgent:
+        """Create a new virtual agent and register its configuration.
+
+        Args:
+            name: Unique agent identifier.
+            **kwargs: Any ``AgentConfig`` fields (e.g., ``system_prompt``,
+                ``capability``, ``tools``, ``agent_type``).
+
+        Returns:
+            A ``VirtualAgentRunner`` conforming to the ``VirtualAgent``
+            protocol.
+        """
         config = AgentConfig(name=name, **kwargs)
         config_data = config.__dict__.copy()
         if "name" in config_data:
@@ -227,6 +397,18 @@ class VirtualAgentManager:
         return self.get_agent(name)
 
     def get_agent(self, name: str) -> VirtualAgent:
+        """Retrieve (or re-create) a virtual agent by name.
+
+        Args:
+            name: The agent identifier previously used with ``create_agent()``
+                or registered via ``AgentConfigService``.
+
+        Returns:
+            A ``VirtualAgentRunner`` for the named agent.
+
+        Raises:
+            ValueError: If no configuration exists for the given name.
+        """
         from .locator import AgentLocator
 
         locator = self.container.get(AgentLocator)
