@@ -10,24 +10,34 @@ from .registry import LocalAgentRegistry, ToolRegistry
 
 logger = get_logger(__name__)
 
+_INFRA_PREFIXES = ("pico_ioc", "pico_agent", "importlib", "contextlib", "pytest", "_pytest", "pluggy")
 
-@component
-class AgentScanner:
-    def __init__(self, registry: LocalAgentRegistry):
-        self.registry = registry
-        self._scanned_modules: Set[str] = set()
+
+def _is_infrastructure(name: str) -> bool:
+    """Return True if *name* belongs to an infrastructure module that scanners should skip."""
+    return name.startswith(_INFRA_PREFIXES)
+
+
+class _ScannerBase:
+    """Shared auto-scan logic for AgentScanner and ToolScanner."""
+
+    _scanned_modules: Set[str]
 
     @configure
     def auto_scan(self):
         frame = inspect.currentframe()
         while frame:
             mod = inspect.getmodule(frame)
-            if mod and mod.__name__ and not self._is_infrastructure(mod.__name__):
+            if mod and mod.__name__ and not _is_infrastructure(mod.__name__):
                 self.scan_module(mod)
             frame = frame.f_back
 
-    def _is_infrastructure(self, name: str) -> bool:
-        return name.startswith(("pico_ioc", "pico_agent", "importlib", "contextlib", "pytest", "_pytest", "pluggy"))
+
+@component
+class AgentScanner(_ScannerBase):
+    def __init__(self, registry: LocalAgentRegistry):
+        self.registry = registry
+        self._scanned_modules: Set[str] = set()
 
     def scan_module(self, module: Any):
         mod_name = module.__name__
@@ -48,22 +58,10 @@ class AgentScanner:
 
 
 @component
-class ToolScanner:
+class ToolScanner(_ScannerBase):
     def __init__(self, registry: ToolRegistry):
         self.registry = registry
         self._scanned_modules: Set[str] = set()
-
-    @configure
-    def auto_scan(self):
-        frame = inspect.currentframe()
-        while frame:
-            mod = inspect.getmodule(frame)
-            if mod and mod.__name__ and not self._is_infrastructure(mod.__name__):
-                self.scan_module(mod)
-            frame = frame.f_back
-
-    def _is_infrastructure(self, name: str) -> bool:
-        return name.startswith(("pico_ioc", "pico_agent", "importlib", "contextlib", "pytest", "_pytest", "pluggy"))
 
     def scan_module(self, module: Any):
         mod_name = module.__name__
