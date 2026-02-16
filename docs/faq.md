@@ -119,23 +119,19 @@ The `ToolRegistry` resolves tool names to instances at execution time.
 
 ### How do I configure API keys?
 
-Provide a `LLMConfig` via a `@factory`:
+Pico-Agent registers a default `LLMConfig` singleton automatically. Use `@configure` to populate it with your API keys:
 
 ```python
-from pico_ioc import factory, provides
+import os
+from pico_ioc import component, configure
 from pico_agent import LLMConfig
 
-@factory
-class LLMConfigFactory:
-    @provides(LLMConfig)
-    def create(self) -> LLMConfig:
-        return LLMConfig(
-            api_keys={
-                "openai": "sk-...",
-                "anthropic": "sk-ant-...",
-            },
-            base_urls={}
-        )
+@component
+class AppConfig:
+    @configure
+    def setup_llm(self, config: LLMConfig):
+        config.api_keys["openai"] = os.getenv("OPENAI_API_KEY")
+        config.api_keys["anthropic"] = os.getenv("ANTHROPIC_API_KEY")
 ```
 
 ### Can I use different models for different agents?
