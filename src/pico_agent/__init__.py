@@ -1,3 +1,9 @@
+"""Pico-Agent: Protocol-based AI agent framework with dependency injection.
+
+Public API exports for the pico-agent library.  All classes, functions, and
+constants listed in ``__all__`` are considered stable public API.
+"""
+
 from .bootstrap import init
 from .config import AgentCapability, AgentConfig, AgentType, LLMConfig
 from .decorators import agent, tool

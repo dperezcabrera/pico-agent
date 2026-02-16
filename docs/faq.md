@@ -13,12 +13,12 @@ Pico-Agent requires Python 3.11 or later.
 ### What LLM providers are supported?
 
 Through LangChain, Pico-Agent supports:
-- **OpenAI** — GPT models (`pico-agent[openai]`)
-- **Azure OpenAI** — Azure-hosted models (`pico-agent[openai]`)
-- **Anthropic** — Claude models (`pico-agent[anthropic]`)
-- **Google** — Gemini models (`pico-agent[google]`)
-- **DeepSeek** — DeepSeek models (`pico-agent[openai]`)
-- **Qwen** — Qwen models (`pico-agent[openai]`)
+- **OpenAI** -- GPT models (`pico-agent[openai]`)
+- **Azure OpenAI** -- Azure-hosted models (`pico-agent[openai]`)
+- **Anthropic** -- Claude models (`pico-agent[anthropic]`)
+- **Google** -- Gemini models (`pico-agent[google]`)
+- **DeepSeek** -- DeepSeek models (`pico-agent[openai]`)
+- **Qwen** -- Qwen models (`pico-agent[openai]`)
 
 ## Agents
 
@@ -134,6 +134,10 @@ class AppConfig:
         config.api_keys["anthropic"] = os.getenv("ANTHROPIC_API_KEY")
 ```
 
+**Important:** Do **not** register your own `LLMConfig` with `@factory` + `@provides`.
+This would conflict with the singleton already provided by `AgentInfrastructureFactory`.
+Always use `@configure` to populate the existing instance.
+
 ### Can I use different models for different agents?
 
 Yes, use different `capability` values which the `ModelRouter` maps to different models. You can also use `llm_profile` to select a specific API key/base URL profile.
@@ -144,32 +148,284 @@ Yes, use different `capability` values which the `ModelRouter` maps to different
 
 `TraceService` is a singleton `@component` that captures agent invocations, tool calls, and LLM requests. Tracing is enabled by default (`tracing_enabled=True` in `@agent`). The `DynamicAgentProxy` and `LangChainAdapter` report trace runs automatically.
 
+---
+
 ## Troubleshooting
 
-### Agent not found
+This section documents every error message in pico-agent with its exact text, cause, and fix.
 
-Ensure the module containing your agent is scanned by pico-ioc:
+---
+
+### `Agent '<name>' is disabled via configuration.`
+
+**Exception:** `AgentDisabledError`
+
+**Cause:** The agent's `AgentConfig.enabled` field is `False`. This can happen when:
+
+- The agent was explicitly disabled in code (`enabled=False` in `@agent`).
+- A `CentralConfigClient` returned a config with `enabled=False`.
+- A runtime override set `enabled=False` via `AgentConfigService.update_agent_config()`.
+
+**Fix:** Re-enable the agent:
 
 ```python
-container = init(modules=["myapp.agents"], config=config)
+config_service = container.get(AgentConfigService)
+config_service.update_agent_config("my_agent", enabled=True)
 ```
 
-### Missing provider dependency
+Or check the central config backend if you use one.
 
-Install the correct extra for your LLM provider:
+---
+
+### `No configuration found for agent: <name>`
+
+**Exception:** `ValueError`
+
+**Source:** `AgentConfigService.get_config()`
+
+**Cause:** No configuration exists for the agent name in any source (central, local, or runtime).  This usually means:
+
+- The module containing the `@agent`-decorated Protocol was not included in the `init(modules=...)` call.
+- The agent name was misspelled.
+- The `AgentScanner` did not run (the module was not in the call stack during `@configure`).
+
+**Fix:**
+
+1. Ensure the module is included in the `init()` call:
+   ```python
+   container = init(modules=["myapp.agents"])
+   ```
+2. Verify the agent name matches exactly between `@agent(name=...)` and the lookup.
+3. Check that the class is decorated with `@agent`, not just defined as a Protocol.
+
+---
+
+### `API Key not found for provider '<provider>' (Profile: '<profile>'). Please configure it via LLMConfig.`
+
+**Exception:** `AgentConfigurationError`
+
+**Source:** `LangChainLLMFactory._require_key()`
+
+**Cause:** The `LLMConfig` singleton does not contain an API key for the detected provider or the specified profile.
+
+**Fix:** Add the key in a `@configure` hook:
+
+```python
+@component
+class AppConfig:
+    @configure
+    def setup(self, config: LLMConfig):
+        config.api_keys["openai"] = os.getenv("OPENAI_API_KEY")
+```
+
+Accepted provider key names: `"openai"`, `"anthropic"`, `"google"`, `"azure"`, `"deepseek"`, `"qwen"`.  If using `llm_profile`, the profile name must also be present in `api_keys`.
+
+---
+
+### `Please install 'pico-agent[openai]' to use this provider.`
+
+**Exception:** `ImportError`
+
+**Source:** `LangChainLLMFactory._create_openai()` (and similar for each provider)
+
+**Cause:** The LangChain package for the target provider is not installed.
+
+**Fix:** Install the correct extra:
 
 ```bash
 pip install pico-agent[openai]      # OpenAI, Azure, DeepSeek, Qwen
 pip install pico-agent[anthropic]   # Claude
 pip install pico-agent[google]      # Gemini
+pip install pico-agent[all]         # All providers
 ```
 
-### API Key not found
+Exact messages per provider:
 
-Ensure your `LLMConfig` includes the key for the provider. The key name must match the provider: `"openai"`, `"anthropic"`, `"google"`, `"azure"`, `"deepseek"`, `"qwen"`.
+| Message | Provider |
+|---|---|
+| `Please install 'pico-agent[openai]' to use this provider.` | OpenAI |
+| `Please install 'pico-agent[openai]' to use Azure OpenAI.` | Azure |
+| `Please install 'pico-agent[google]' to use Gemini.` | Google |
+| `Please install 'pico-agent[anthropic]' to use Claude.` | Anthropic |
+| `Please install 'pico-agent[openai]' to use DeepSeek.` | DeepSeek |
+| `Please install 'pico-agent[openai]' to use Qwen.` | Qwen |
+
+---
+
+### `Unknown LLM Provider: <provider>`
+
+**Exception:** `ValueError`
+
+**Source:** `LangChainLLMFactory.create_chat_model()`
+
+**Cause:** The provider string (extracted from a `"provider:model"` name or auto-detected) is not one of the supported values.
+
+**Fix:** Use a supported provider name: `openai`, `azure`, `gemini`, `google`, `claude`, `anthropic`, `deepseek`, `qwen`.
+
+---
+
+### `Tool <name> must implement __call__, run, execute, or invoke.`
+
+**Exception:** `ValueError`
+
+**Source:** `ToolWrapper._resolve_function()`
+
+**Cause:** The `@tool`-decorated class does not have any of the expected callable methods.
+
+**Fix:** Add one of `__call__`, `run`, `execute`, or `invoke` to your tool class:
+
+```python
+@tool(name="my_tool", description="Does something")
+@component
+class MyTool:
+    def run(self, input: str) -> str:  # <-- add this
+        return "result"
+```
+
+---
+
+### `Agent <name> has no method <method>`
+
+**Exception:** `AttributeError`
+
+**Source:** `DynamicAgentProxy.__getattr__()`
+
+**Cause:** You called a method on the agent proxy that does not exist on the Protocol class.
+
+**Fix:** Use a method name that is defined on the Protocol:
+
+```python
+@agent(name="my_agent", ...)
+class MyAgent(Protocol):
+    def summarize(self, text: str) -> str: ...  # defined here
+
+agent = locator.get_agent("my_agent")
+agent.summarize("Hello")  # correct
+# agent.analyze("Hello")  # would raise AttributeError
+```
+
+---
+
+### `Virtual Agent '<name>' has no protocol definition.`
+
+**Exception:** `AttributeError`
+
+**Source:** `DynamicAgentProxy.__getattr__()`
+
+**Cause:** The agent proxy has no associated Protocol class.  This happens when a virtual agent (config-only, no Protocol) is accessed via `DynamicAgentProxy` instead of `VirtualAgentRunner`.
+
+**Fix:** Use `VirtualAgentManager` or `AgentLocator.get_agent()` which correctly returns a `VirtualAgentRunner` for virtual agents.
+
+---
+
+### `Cannot call sync run() from inside an async loop. Use await agent.arun() instead.`
+
+**Exception:** `RuntimeError`
+
+**Source:** `VirtualAgentRunner.run_with_args()`
+
+**Cause:** A `WORKFLOW`-type virtual agent's `run()` method was called from inside an already-running asyncio event loop.  Workflow agents use `asyncio.run()` internally, which cannot be nested.
+
+**Fix:** Use the async variant:
+
+```python
+# Instead of:
+result = agent.run("input")
+
+# Use:
+result = await agent.arun("input")
+```
+
+---
+
+### `Unknown workflow type: <type>`
+
+**Exception:** `ValueError`
+
+**Source:** `VirtualAgentRunner._arun_workflow()`
+
+**Cause:** The `workflow_config["type"]` value is not recognised.  Currently only `"map_reduce"` is supported.
+
+**Fix:** Set the workflow type to `"map_reduce"`:
+
+```python
+config = AgentConfig(
+    name="my_workflow",
+    agent_type=AgentType.WORKFLOW,
+    workflow_config={"type": "map_reduce", "splitter": "...", "reducer": "..."},
+)
+```
+
+---
+
+### `Map-Reduce requires 'splitter' and 'reducer'`
+
+**Exception:** `ValueError`
+
+**Source:** `VirtualAgentRunner._arun_map_reduce()`
+
+**Cause:** The `workflow_config` dictionary is missing the `"splitter"` or `"reducer"` keys.
+
+**Fix:** Provide both keys:
+
+```python
+workflow_config={
+    "type": "map_reduce",
+    "splitter": "splitter_agent",
+    "reducer": "reducer_agent",
+    "mapper": "worker_agent",  # or "mappers": {"type_a": "agent_a"}
+}
+```
+
+---
+
+### `Agent is disabled`
+
+**Exception:** `ValueError`
+
+**Source:** `VirtualAgentRunner.run_structured()`
+
+**Cause:** A structured-output call was made to a disabled virtual agent.
+
+**Fix:** Enable the agent via `AgentConfigService.update_agent_config(name, enabled=True)`.
+
+---
+
+### `Cannot determine module for object <obj>`
+
+**Exception:** `ImportError`
+
+**Source:** `bootstrap._import_module_like()`
+
+**Cause:** An item passed in the `modules` list to `init()` is not a module, string, or object with a `__module__` attribute.
+
+**Fix:** Pass module objects, dotted module name strings, or importable objects:
+
+```python
+import myapp
+container = init(modules=[myapp])           # module object
+container = init(modules=["myapp.agents"])   # string
+```
+
+---
+
+### Validation warnings and errors
+
+`AgentValidator.validate()` returns a `ValidationReport` with these possible issues:
+
+| Field | Message | Severity |
+|---|---|---|
+| `name` | `Agent name cannot be empty` | ERROR |
+| `capability` | `Agent capability must be defined` | ERROR |
+| `temperature` | `Temperature must be between 0.0 and 2.0` | ERROR |
+| `temperature` | `High temperature (>1.0) may cause hallucinations` | WARNING |
+| `system_prompt` | `System prompt is empty` | WARNING |
+
+---
 
 ### Tools not being called
 
 - Ensure the tool name in `@agent(tools=[...])` matches the `@tool(name=...)` value
 - Use `AgentType.REACT` for agents that need to iterate with tools
 - Verify the tool description is clear enough for the LLM to select it
+- Check that the tool class implements `__call__`, `run`, `execute`, or `invoke`

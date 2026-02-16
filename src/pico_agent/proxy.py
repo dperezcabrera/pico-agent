@@ -1,3 +1,11 @@
+"""Agent proxy classes for runtime execution.
+
+``TracedAgentProxy`` provides a simple execute-by-name interface used by
+``AgentInterceptor``.  ``DynamicAgentProxy`` creates runtime callables that
+match the Protocol method signatures, supporting tracing, structured output,
+async execution, and runtime model overrides.
+"""
+
 import asyncio
 import inspect
 from typing import Any, Dict, List, Optional, Type, get_type_hints
@@ -21,6 +29,16 @@ logger = get_logger(__name__)
 
 @component
 class TracedAgentProxy:
+    """Lightweight proxy that executes an agent by name with tracing.
+
+    Used by ``AgentInterceptor`` for interceptor-based agent invocation.
+
+    Args:
+        config_service: Service for resolving agent configurations.
+        tool_registry: Registry for tool lookup.
+        llm_factory: Factory for creating LLM instances.
+        model_router: Router for capability-to-model resolution.
+    """
     def __init__(
         self,
         config_service: AgentConfigService,
@@ -34,6 +52,18 @@ class TracedAgentProxy:
         self.model_router = model_router
 
     def execute_agent(self, agent_name: str, user_input: str) -> Any:
+        """Execute an agent by name with a plain text input.
+
+        Args:
+            agent_name: The unique agent identifier.
+            user_input: The user's message.
+
+        Returns:
+            The LLM response (text string).
+
+        Raises:
+            AgentDisabledError: If the agent's ``enabled`` flag is ``False``.
+        """
         config = self.config_service.get_config(agent_name)
 
         if not config.enabled:
@@ -69,6 +99,33 @@ class TracedAgentProxy:
 
 
 class DynamicAgentProxy:
+    """Runtime proxy that creates callable methods matching a Protocol's signatures.
+
+    When you call ``container.get(MyAgentProtocol)`` or
+    ``agent_locator.get_agent("my_agent")``, you receive a
+    ``DynamicAgentProxy``.  Attribute access dynamically generates wrapper
+    functions that:
+
+    1. Extract input context from method arguments.
+    2. Resolve the agent's configuration, model, and tools.
+    3. Invoke the LLM (sync or async).
+    4. Parse structured output if the return type is a Pydantic model.
+    5. Record traces via ``TraceService`` (if available).
+
+    A runtime model override can be passed via the ``_model`` keyword
+    argument on any agent method call.
+
+    Args:
+        agent_name: Unique agent identifier.
+        protocol_cls: The Protocol class (may be ``None`` for virtual agents).
+        config_service: Service for resolving agent configurations.
+        tool_registry: Registry for tool lookup.
+        llm_factory: Factory for creating LLM instances.
+        model_router: Router for capability-to-model resolution.
+        container: The pico-ioc container.
+        locator: Optional ``AgentLocator`` for resolving child agents.
+    """
+
     def __init__(
         self,
         agent_name: str,

@@ -1,8 +1,16 @@
+"""Logging utilities for pico-agent.
+
+All pico-agent loggers live under the ``pico_agent`` namespace.  Use
+``get_logger()`` to obtain a namespaced logger and ``configure_logging()``
+to set the level and handler for the entire library.
+"""
+
 import logging
 import sys
 from typing import Optional
 
 DEFAULT_FORMAT = "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"
+"""str: Default log format used by ``configure_logging``."""
 
 
 def get_logger(name: str) -> logging.Logger:

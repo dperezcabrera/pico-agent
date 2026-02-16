@@ -1,3 +1,13 @@
+"""Auto-discovery scanners for agents and tools.
+
+``AgentScanner`` and ``ToolScanner`` walk the call-stack modules during the
+pico-ioc ``@configure`` phase to find classes decorated with ``@agent`` and
+``@tool``, then register them in their respective registries.
+
+Infrastructure modules (pico-ioc, pico-agent, importlib, pytest, etc.) are
+skipped automatically.
+"""
+
 import inspect
 from typing import Any, Set
 
@@ -19,12 +29,23 @@ def _is_infrastructure(name: str) -> bool:
 
 
 class _ScannerBase:
-    """Shared auto-scan logic for AgentScanner and ToolScanner."""
+    """Shared auto-scan logic for ``AgentScanner`` and ``ToolScanner``.
+
+    The ``auto_scan`` method is decorated with ``@configure`` so that pico-ioc
+    invokes it during container initialisation.  It walks the Python call
+    stack, inspects each module, and delegates to the subclass's
+    ``scan_module`` method.
+    """
 
     _scanned_modules: Set[str]
 
     @configure
     def auto_scan(self):
+        """Walk the call stack and scan each non-infrastructure module.
+
+        This method is called automatically by pico-ioc during the
+        ``@configure`` phase.
+        """
         frame = inspect.currentframe()
         while frame:
             mod = inspect.getmodule(frame)
@@ -35,11 +56,29 @@ class _ScannerBase:
 
 @component
 class AgentScanner(_ScannerBase):
+    """Discovers ``@agent``-decorated Protocol classes and registers them.
+
+    Walks Python modules to find classes that carry the ``IS_AGENT_INTERFACE``
+    flag, extracts the ``AgentConfig`` from ``AGENT_META_KEY``, and stores
+    both the Protocol class and its config in ``LocalAgentRegistry``.
+
+    Args:
+        registry: The ``LocalAgentRegistry`` to populate.
+    """
+
     def __init__(self, registry: LocalAgentRegistry):
         self.registry = registry
         self._scanned_modules: Set[str] = set()
 
     def scan_module(self, module: Any):
+        """Inspect a module for ``@agent``-decorated classes.
+
+        Each discovered class is registered in the ``LocalAgentRegistry``.
+        Modules are scanned at most once.
+
+        Args:
+            module: A Python module object.
+        """
         mod_name = module.__name__
         if mod_name in self._scanned_modules:
             return
@@ -59,11 +98,28 @@ class AgentScanner(_ScannerBase):
 
 @component
 class ToolScanner(_ScannerBase):
+    """Discovers ``@tool``-decorated classes and registers them.
+
+    Walks Python modules to find classes that carry ``TOOL_META_KEY``,
+    extracts the ``ToolConfig``, and stores the class in ``ToolRegistry``.
+
+    Args:
+        registry: The ``ToolRegistry`` to populate.
+    """
+
     def __init__(self, registry: ToolRegistry):
         self.registry = registry
         self._scanned_modules: Set[str] = set()
 
     def scan_module(self, module: Any):
+        """Inspect a module for ``@tool``-decorated classes.
+
+        Each discovered class is registered in the ``ToolRegistry``.
+        Modules are scanned at most once.
+
+        Args:
+            module: A Python module object.
+        """
         mod_name = module.__name__
         if mod_name in self._scanned_modules:
             return

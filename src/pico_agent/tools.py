@@ -1,3 +1,10 @@
+"""Tool wrappers for pico-agent.
+
+``ToolWrapper`` adapts pico-agent ``@tool``-decorated classes to the
+LangChain tool interface.  ``AgentAsTool`` wraps child agents so they can
+be invoked as tools by a parent agent during a ReAct loop.
+"""
+
 import inspect
 from typing import Any, Optional, Type, get_type_hints
 
@@ -10,7 +17,19 @@ logger = get_logger(__name__)
 
 
 def _create_schema_from_sig(name: str, func_or_method: Any) -> Type[BaseModel]:
-    """Build a Pydantic model from the signature of *func_or_method*."""
+    """Build a Pydantic model from the signature of *func_or_method*.
+
+    The generated model is used as the ``args_schema`` expected by LangChain
+    tool invocation.
+
+    Args:
+        name: Base name for the generated model (suffixed with ``"Input"``).
+        func_or_method: The callable whose parameters define the schema
+            fields.
+
+    Returns:
+        A dynamically created ``pydantic.BaseModel`` subclass.
+    """
     sig = inspect.signature(func_or_method)
     type_hints = get_type_hints(func_or_method)
 
@@ -26,6 +45,21 @@ def _create_schema_from_sig(name: str, func_or_method: Any) -> Type[BaseModel]:
 
 
 class ToolWrapper:
+    """Adapts a pico-agent ``@tool``-decorated instance to the LangChain tool interface.
+
+    Exposes ``name``, ``description``, ``args_schema``, and ``__call__`` so
+    the instance can be passed directly to LangChain tool-binding APIs.
+
+    Args:
+        instance: An instance of a ``@tool``-decorated class.
+        config: The ``ToolConfig`` extracted from the class metadata.
+
+    Raises:
+        ValueError: If the instance does not implement ``__call__``, ``run``,
+            ``execute``, or ``invoke``.  Message:
+            ``"Tool <name> must implement __call__, run, execute, or invoke."``
+    """
+
     def __init__(self, instance: Any, config: ToolConfig):
         self.instance = instance
         self.name = config.name
@@ -48,6 +82,19 @@ class ToolWrapper:
 
 
 class AgentAsTool:
+    """Wraps a ``DynamicAgentProxy`` as a LangChain-compatible tool.
+
+    This allows a parent agent to invoke a child agent through the LLM's
+    tool-calling mechanism.  The tool's ``args_schema`` is derived from the
+    child agent's Protocol method signature.
+
+    Args:
+        agent_proxy: A ``DynamicAgentProxy`` for the child agent.
+        method_name: The protocol method to invoke (default: ``"invoke"``).
+        description: Optional description override.  If empty, the child
+            agent's ``AgentConfig.description`` is used.
+    """
+
     def __init__(self, agent_proxy: Any, method_name: str = "invoke", description: str = ""):
         self.proxy = agent_proxy
         self.method_name = method_name
