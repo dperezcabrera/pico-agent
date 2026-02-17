@@ -39,6 +39,7 @@ class TracedAgentProxy:
         llm_factory: Factory for creating LLM instances.
         model_router: Router for capability-to-model resolution.
     """
+
     def __init__(
         self,
         config_service: AgentConfigService,

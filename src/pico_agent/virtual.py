@@ -134,6 +134,7 @@ class VirtualAgentRunner:
         locator: ``AgentLocator`` for resolving child agents.
         scheduler: Concurrency scheduler for async map-reduce.
     """
+
     def __init__(
         self,
         config: AgentConfig,
@@ -361,6 +362,7 @@ class VirtualAgentManager:
         ... )
         >>> result = agent.run("Hello!")
     """
+
     def __init__(
         self,
         config_service: AgentConfigService,

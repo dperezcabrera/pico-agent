@@ -104,6 +104,7 @@ class VirtualToolManager:
         Returns:
             The created ``DynamicTool`` instance.
         """
+
         def wrapper(payload: List[Dict[str, Any]]) -> str:
             return handler(payload)
 
