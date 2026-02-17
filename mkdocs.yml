@@ -112,9 +112,21 @@ markdown_extensions:
       custom_checkbox: true
   - pymdownx.tilde
 
+hooks:
+  - docs/hooks.py
+
 plugins:
   - search:
       separator: '[\s\-,:!=\[\]()"/]+|(?!\b)(?=[A-Z][a-z])|\.(?!\d)|&[lg]t;'
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+          options:
+            show_source: true
+            show_root_heading: true
+            members_order: source
+            docstring_style: google
   - minify:
       minify_html: true
   - git-revision-date-localized:
@@ -131,5 +143,7 @@ nav:
     - Custom Tools: how-to/custom-tools.md
     - Testing Agents: how-to/testing.md
     - Multiple Providers: how-to/multi-provider.md
+  - Reference:
+    - API Reference: reference/index.md
   - Claude Code Skills: skills.md
   - FAQ: faq.md
