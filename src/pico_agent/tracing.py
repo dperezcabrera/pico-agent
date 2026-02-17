@@ -41,6 +41,7 @@ class TraceRun:
         error: Error message if the run failed (set by ``end_run``).
         extra: Arbitrary metadata (e.g., ``{"runtime_model": "gpt-4"}``).
     """
+
     id: str
     name: str
     run_type: str

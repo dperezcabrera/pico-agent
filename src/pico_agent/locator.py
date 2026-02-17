@@ -115,6 +115,7 @@ class AgentLocator:
         experiment_registry: A/B experiment variant selector.
         scheduler: Concurrency scheduler for async operations.
     """
+
     def __init__(
         self,
         container: PicoContainer,
