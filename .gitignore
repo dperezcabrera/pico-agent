@@ -188,6 +188,12 @@ cython_debug/
 #  you could uncomment the following to ignore the entire vscode folder
 # .vscode/
 
+# Auto-generated version file
+src/pico_agent/_version.py
+
+# Local planning docs
+evolution-plan.md
+
 # Ruff stuff:
 .ruff_cache/
 
