@@ -243,9 +243,9 @@ def test_my_agent():
 
 -----
 
-## Claude Code Skills
+## AI Coding Skills
 
-Install [Claude Code](https://code.claude.com) skills for AI-assisted development with pico-agent:
+Install [Claude Code](https://code.claude.com) or [OpenAI Codex](https://openai.com/index/introducing-codex/) skills for AI-assisted development with pico-agent:
 
 ```bash
 curl -sL https://raw.githubusercontent.com/dperezcabrera/pico-skills/main/install.sh | bash -s -- agent
