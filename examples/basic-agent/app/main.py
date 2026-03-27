@@ -8,13 +8,8 @@ from pico_agent import AgentRunner
 async def main():
     config = configuration(YamlTreeSource("config.yml"))
 
-    container = init(
-        modules=[
-            "app.tools",
-            "app.agents",
-        ],
-        config=config,
-    )
+    # pico-boot scans "app" recursively and auto-discovers pico-agent
+    container = init(modules=["app"], config=config)
 
     runner = await container.aget(AgentRunner)
 

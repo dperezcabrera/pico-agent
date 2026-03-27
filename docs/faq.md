@@ -193,7 +193,7 @@ Or check the central config backend if you use one.
 
 1. Ensure the module is included in the `init()` call:
    ```python
-   container = init(modules=["myapp.agents"])
+   container = init(modules=["myapp"])  # scans recursively
    ```
 2. Verify the agent name matches exactly between `@agent(name=...)` and the lookup.
 3. Check that the class is decorated with `@agent`, not just defined as a Protocol.
