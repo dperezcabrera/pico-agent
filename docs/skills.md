@@ -8,7 +8,7 @@
 curl -sL https://raw.githubusercontent.com/dperezcabrera/pico-skills/main/install.sh | bash -s -- agent
 ```
 
-Or install all pico-framework skills:
+Or install all pico skills:
 
 ```bash
 curl -sL https://raw.githubusercontent.com/dperezcabrera/pico-skills/main/install.sh | bash
@@ -48,7 +48,7 @@ Creates a new pico-ioc component with dependency injection. Use when adding serv
 
 ### `/add-tests`
 
-Generates tests for existing pico-framework components. Creates unit tests for agents and tools with mocked LLM responses.
+Generates tests for existing pico components. Creates unit tests for agents and tools with mocked LLM responses.
 
 ```
 /add-tests SupportAgent
