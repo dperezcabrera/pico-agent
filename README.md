@@ -1,4 +1,4 @@
-# 📦 pico-agent
+# pico-agent
 
 [![PyPI](https://img.shields.io/pypi/v/pico-agent.svg)](https://pypi.org/project/pico-agent/)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/dperezcabrera/pico-agent)
@@ -17,15 +17,15 @@
 
 It eliminates the boilerplate of manually managing LLM chains, prompts, and tools. Instead, you declare **what** you want the agent to do using Python Protocols, and the framework handles **how** to execute it via **[Pico-IoC](https://github.com/dperezcabrera/pico-ioc)**.
 
-> 🤖 **Protocol-First Design**
-> 💉 **True Dependency Injection**
-> 🧠 **Smart Model Routing**
-> 🔄 **Multi-Agent Orchestration**
-> 🔌 **LLM Agnostic (LangChain based)**
+> **Protocol-First Design**
+> **True Dependency Injection**
+> **Smart Model Routing**
+> **Multi-Agent Orchestration**
+> **LLM Agnostic (LangChain based)**
 
 -----
 
-## 🎯 Why pico-agent?
+## Why pico-agent?
 
 Most agent frameworks require you to instantiate classes, manually bind tools, and hardcode model names. Pico-Agent moves this complexity into the IoC container, promoting clean architecture and testability.
 
@@ -39,7 +39,7 @@ Most agent frameworks require you to instantiate classes, manually bind tools, a
 
 -----
 
-## 🧱 Core Features
+## Core Features
 
   - **Declarative Agents:** Use `@agent` on standard `typing.Protocol`.
   - **Capability Routing:** Request `FAST`, `SMART`, `CODING` capabilities instead of specific model names.
@@ -49,7 +49,7 @@ Most agent frameworks require you to instantiate classes, manually bind tools, a
 
 -----
 
-## 📦 Installation
+## Installation
 
 ```bash
 pip install pico-agent
@@ -63,7 +63,7 @@ pip install "pico-agent[openai,google]"
 
 -----
 
-## 🚀 Quick Example
+## Quick Example
 
 ### 1\. Define the Agent Protocol
 
@@ -134,7 +134,7 @@ container = init(modules=["pico_agent", "app"])
 
 -----
 
-## 🛠 Advanced Usage
+## Advanced Usage
 
 ### ReAct Agents & Tools
 
@@ -180,7 +180,7 @@ class Orchestrator(Protocol):
 
 -----
 
-## ⚙️ Model Routing & Configuration
+## Model Routing & Configuration
 
 `pico-agent` uses semantic capabilities to route to specific models. You can configure this globally using a configurer.
 
@@ -202,7 +202,7 @@ class RouterConfig:
 
 -----
 
-## 🔌 With pico-boot
+## With pico-boot
 
 If you use [pico-boot](https://github.com/dperezcabrera/pico-boot), pico-agent is automatically discovered via entry points — no need to include it in your modules list:
 
@@ -215,7 +215,7 @@ container = init(modules=["app"])
 
 -----
 
-## 🧪 Testing
+## Testing
 
 Testing is simple because you can mock the underlying `LLMFactory` or the agent protocol itself.
 
@@ -263,6 +263,6 @@ See [pico-skills](https://github.com/dperezcabrera/pico-skills) for details.
 
 ---
 
-## 📝 License
+## License
 
 This project is licensed under the MIT License.
