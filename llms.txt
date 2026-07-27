@@ -1,0 +1,69 @@
+# pico-agent
+
+> Multi-agent orchestration framework built on Pico-IoC with LLM integration
+
+Install: `pip install pico-agent`. Import surface: `from pico_agent import ...`.
+
+## Usage
+
+```python
+from typing import Protocol
+from pico_agent import agent, AgentCapability, AgentType
+
+@agent(
+    name="translator",
+    capability=AgentCapability.FAST,  # Uses a faster/cheaper model
+    system_prompt="You are a professional translator.",
+    user_prompt_template="Translate this to Spanish: {text}",
+    agent_type=AgentType.ONE_SHOT
+)
+class TranslatorAgent(Protocol):
+    def translate(self, text: str) -> str: ...
+```
+
+## Public API
+
+- `class AgentConfig` — Complete configuration for a single agent.
+- `class LLMConfig` — Centralised API-key and base-URL store for all LLM providers.
+- `class AgentType(str, Enum)` — Execution strategy for an agent.
+- `class AgentCapability` — Abstract capability labels mapped to concrete models by ``ModelRouter``.
+- `agent(name: str, capability: str=AgentCapability.SMART, system_prompt: str='', description: str='', user_prompt_template: str='{input}', agent_type: AgentType=AgentType.ONE_SHOT, max_iterations: int=5, tools: Optional[List[str]]=None, agents: Optional[List[str]]=None, tags: Optional[List[str]]=None, tracing_enabled: bool=True, temperature: float=0.7, llm_profile: Optional[str]=None)` — Declare a Protocol class as a pico-agent.
+- `tool(name: str, description: str)` — Declare a class as a pico-agent tool.
+- `class AgentConfigService` — Merges central, local, and runtime configuration for agents.
+- `class ToolRegistry` — Central registry that stores tool classes/instances and supports tag-based lookup.
+- `class CentralConfigClient(Protocol)` — Protocol for retrieving and persisting agent configuration remotely.
+- `class LLMFactory(Protocol)` — Protocol for creating ``LLM`` instances from model parameters.
+- `class AgentScanner(_ScannerBase)` — Discovers ``@agent``-decorated Protocol classes and registers them.
+- `class ToolScanner(_ScannerBase)` — Discovers ``@tool``-decorated classes and registers them.
+- `class VirtualAgentManager` — Creates and manages virtual agents programmatically at runtime.
+- `class VirtualAgent(Protocol)` — Protocol for virtual agents (config-only, no Protocol class).
+- `class VirtualToolManager` — Creates and registers ``DynamicTool`` instances at runtime.
+- `class DynamicTool` — A tool created at runtime from a plain callable.
+- `class AgentLocator` — Primary entry point for obtaining agent proxies.
+- `class TraceService` — Singleton service that collects hierarchical trace runs.
+- `class TraceRun` — A single trace record for an agent, tool, or LLM invocation.
+- `class ExperimentRegistry` — Singleton registry for A/B experiments on agents.
+- `class AgentValidator` — Validates ``AgentConfig`` instances for correctness.
+- `class ValidationReport` — Result of validating an ``AgentConfig``.
+- `class ValidationIssue` — A single validation finding.
+- `class Severity(str, Enum)` — Severity level for a validation issue.
+- `class AgentError(Exception)` — Base exception for all pico-agent errors.
+- `class AgentDisabledError(AgentError)` — Raised when an agent is invoked but its configuration has ``enabled=False``.
+- `class AgentConfigurationError(AgentError)` — Raised for missing or invalid agent / provider configuration.
+- `class AgentLifecycleError(AgentError)` — Raised when an operation violates the agent system lifecycle.
+- `class AgentSystem` — Lifecycle coordinator that publishes phase transitions via ``EventBus``.
+- `class LifecyclePhase(str, Enum)` — Phases of the pico-agent system lifecycle.
+- `class LifecycleEvent(Event)` — Event published when the system transitions between lifecycle phases.
+- `init(*args: Any, **kwargs: Any)` — Initialise a pico-ioc container with pico-agent infrastructure.
+- `configure_logging(level: int=logging.INFO, handler: Optional[logging.Handler]=None)` — Configure logging for the pico_agent library.
+- `get_logger(name: str)` — Get a logger with the pico_agent namespace.
+
+## Docs
+
+- docs/architecture.md
+- docs/faq.md
+- docs/getting-started.md
+- docs/how-to/ (3 pages)
+- docs/reference/ (1 pages)
+- docs/releases/ (1 pages)
+- docs/skills.md
