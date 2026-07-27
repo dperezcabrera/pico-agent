@@ -27,14 +27,6 @@ class PlatformScheduler:
         self.limit = int(os.getenv("PICO_AGENT_MAX_CONCURRENCY", "10"))
         self._semaphore = asyncio.Semaphore(self.limit)
 
-    async def acquire(self):
-        """Acquire a concurrency slot (blocks if the limit is reached)."""
-        await self._semaphore.acquire()
-
-    def release(self):
-        """Release a concurrency slot."""
-        self._semaphore.release()
-
     @property
     def semaphore(self):
         """The underlying ``asyncio.Semaphore`` for use with ``async with``."""

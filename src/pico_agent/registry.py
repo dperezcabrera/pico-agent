@@ -156,7 +156,6 @@ class AgentConfigService:
     def __init__(self, central_client: CentralConfigClient, local_registry: LocalAgentRegistry):
         self.central_client = central_client
         self.local_registry = local_registry
-        self.auto_register = True
         self._runtime_overrides: Dict[str, Dict[str, Any]] = {}
 
     def get_config(self, name: str) -> AgentConfig:
@@ -205,12 +204,3 @@ class AgentConfigService:
         if name not in self._runtime_overrides:
             self._runtime_overrides[name] = {}
         self._runtime_overrides[name].update(kwargs)
-
-    def reset_agent_config(self, name: str):
-        """Remove all runtime overrides for an agent.
-
-        Args:
-            name: Agent identifier.
-        """
-        if name in self._runtime_overrides:
-            del self._runtime_overrides[name]

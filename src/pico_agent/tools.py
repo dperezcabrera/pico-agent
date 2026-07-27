@@ -16,6 +16,29 @@ from .logging import get_logger
 logger = get_logger(__name__)
 
 
+def resolve_tool_instance(container: Any, tool_registry: Any, tool_name: str) -> Optional[Any]:
+    """Resolve a tool by name from the container or the ``ToolRegistry``.
+
+    Looks the tool up in the pico-ioc container first, then falls back to the
+    ``ToolRegistry``.  Registry entries that are classes are instantiated.
+
+    Args:
+        container: The pico-ioc container.
+        tool_registry: The ``ToolRegistry`` to fall back to.
+        tool_name: The tool identifier.
+
+    Returns:
+        The resolved tool instance, or ``None`` if not found.
+    """
+    if container.has(tool_name):
+        return container.get(tool_name)
+
+    tool_ref = tool_registry.get_tool(tool_name)
+    if tool_ref:
+        return tool_ref() if isinstance(tool_ref, type) else tool_ref
+    return None
+
+
 def _create_schema_from_sig(name: str, func_or_method: Any) -> Type[BaseModel]:
     """Build a Pydantic model from the signature of *func_or_method*.
 

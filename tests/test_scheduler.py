@@ -22,13 +22,6 @@ class TestPlatformScheduler:
         assert isinstance(scheduler.semaphore, asyncio.Semaphore)
 
     @pytest.mark.asyncio
-    async def test_acquire_and_release(self):
-        scheduler = PlatformScheduler()
-        await scheduler.acquire()
-        # Should complete without blocking
-        scheduler.release()
-
-    @pytest.mark.asyncio
     async def test_concurrent_access_limited(self):
         with patch.dict(os.environ, {"PICO_AGENT_MAX_CONCURRENCY": "2"}):
             scheduler = PlatformScheduler()
@@ -38,12 +31,11 @@ class TestPlatformScheduler:
 
         async def task():
             nonlocal acquired_count, max_concurrent
-            await scheduler.acquire()
-            acquired_count += 1
-            max_concurrent = max(max_concurrent, acquired_count)
-            await asyncio.sleep(0.01)
-            acquired_count -= 1
-            scheduler.release()
+            async with scheduler.semaphore:
+                acquired_count += 1
+                max_concurrent = max(max_concurrent, acquired_count)
+                await asyncio.sleep(0.01)
+                acquired_count -= 1
 
         # Run 5 tasks with concurrency limit of 2
         await asyncio.gather(*[task() for _ in range(5)])
@@ -81,18 +73,3 @@ class TestSchedulerEdgeCases:
                 scheduler = PlatformScheduler()
                 # Default is 10
                 assert scheduler.limit == 10
-
-    @pytest.mark.asyncio
-    async def test_multiple_acquires_up_to_limit(self):
-        with patch.dict(os.environ, {"PICO_AGENT_MAX_CONCURRENCY": "3"}):
-            scheduler = PlatformScheduler()
-
-        # Should be able to acquire up to the limit
-        await scheduler.acquire()
-        await scheduler.acquire()
-        await scheduler.acquire()
-
-        # Release all
-        scheduler.release()
-        scheduler.release()
-        scheduler.release()

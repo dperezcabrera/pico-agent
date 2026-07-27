@@ -1,16 +1,15 @@
 """Agent proxy classes for runtime execution.
 
-``TracedAgentProxy`` provides a simple execute-by-name interface used by
-``AgentInterceptor``.  ``DynamicAgentProxy`` creates runtime callables that
-match the Protocol method signatures, supporting tracing, structured output,
-async execution, and runtime model overrides.
+``DynamicAgentProxy`` creates runtime callables that match the Protocol
+method signatures, supporting tracing, structured output, async execution,
+and runtime model overrides.
 """
 
 import asyncio
 import inspect
 from typing import Any, Dict, List, Optional, Type, get_type_hints
 
-from pico_ioc import PicoContainer, component
+from pico_ioc import PicoContainer
 from pydantic import BaseModel
 
 from .config import AgentConfig, AgentType
@@ -21,82 +20,10 @@ from .logging import get_logger
 from .messages import build_messages
 from .registry import AgentConfigService, ToolRegistry
 from .router import ModelRouter
-from .tools import AgentAsTool, ToolWrapper
+from .tools import AgentAsTool, ToolWrapper, resolve_tool_instance
 from .tracing import TraceService
 
 logger = get_logger(__name__)
-
-
-@component
-class TracedAgentProxy:
-    """Lightweight proxy that executes an agent by name with tracing.
-
-    Used by ``AgentInterceptor`` for interceptor-based agent invocation.
-
-    Args:
-        config_service: Service for resolving agent configurations.
-        tool_registry: Registry for tool lookup.
-        llm_factory: Factory for creating LLM instances.
-        model_router: Router for capability-to-model resolution.
-    """
-
-    def __init__(
-        self,
-        config_service: AgentConfigService,
-        tool_registry: ToolRegistry,
-        llm_factory: LLMFactory,
-        model_router: ModelRouter,
-    ):
-        self.config_service = config_service
-        self.tool_registry = tool_registry
-        self.llm_factory = llm_factory
-        self.model_router = model_router
-
-    def execute_agent(self, agent_name: str, user_input: str) -> Any:
-        """Execute an agent by name with a plain text input.
-
-        Args:
-            agent_name: The unique agent identifier.
-            user_input: The user's message.
-
-        Returns:
-            The LLM response (text string).
-
-        Raises:
-            AgentDisabledError: If the agent's ``enabled`` flag is ``False``.
-        """
-        config = self.config_service.get_config(agent_name)
-
-        if not config.enabled:
-            raise AgentDisabledError(agent_name)
-
-        final_model_name = self.model_router.resolve_model(capability=config.capability, runtime_override=None)
-
-        llm = self.llm_factory.create(
-            model_name=final_model_name, temperature=config.temperature, max_tokens=config.max_tokens
-        )
-
-        resolved_tools = []
-        for tool_name in config.tools:
-            t = self.tool_registry.get_tool(tool_name)
-            if t:
-                resolved_tools.append(t)
-
-        dynamic = self.tool_registry.get_dynamic_tools(config.tags)
-        for dt in dynamic:
-            if dt not in resolved_tools:
-                resolved_tools.append(dt)
-
-        messages = []
-        if config.system_prompt:
-            messages.append({"role": "system", "content": config.system_prompt})
-
-        messages.append({"role": "user", "content": user_input})
-
-        if config.agent_type == AgentType.REACT:
-            return llm.invoke_agent_loop(messages, resolved_tools, config.max_iterations)
-        else:
-            return llm.invoke(messages, resolved_tools)
 
 
 class DynamicAgentProxy:
@@ -192,7 +119,9 @@ class DynamicAgentProxy:
                 if inspect.iscoroutinefunction(method_ref):
 
                     async def async_inner():
-                        result = await self._execute_async(input_context, return_type, runtime_model)
+                        result = await asyncio.to_thread(
+                            self._execute, input_context, return_type, runtime_model
+                        )
                         if self.tracer and run_id:
                             self.tracer.end_run(run_id, outputs=result)
                         return result
@@ -220,11 +149,6 @@ class DynamicAgentProxy:
                 continue
             context[name] = str(val)
         return context
-
-    async def _execute_async(
-        self, input_context: Dict[str, Any], return_type: Type, runtime_model: Optional[str]
-    ) -> Any:
-        return await asyncio.to_thread(self._execute, input_context, return_type, runtime_model)
 
     def _execute(self, input_context: Dict[str, Any], return_type: Type, runtime_model: Optional[str]) -> Any:
         config = self.config_service.get_config(self.agent_name)
@@ -274,13 +198,7 @@ class DynamicAgentProxy:
 
     def _resolve_tool(self, tool_name: str) -> Any:
         """Resolve a tool by name from container or registry."""
-        if self.container.has(tool_name):
-            return self.container.get(tool_name)
-
-        tool_ref = self.tool_registry.get_tool(tool_name)
-        if tool_ref:
-            return tool_ref() if isinstance(tool_ref, type) else tool_ref
-        return None
+        return resolve_tool_instance(self.container, self.tool_registry, tool_name)
 
     def _wrap_tool(self, tool_instance: Any) -> Any:
         """Wrap tool instance if needed."""
@@ -340,7 +258,4 @@ class DynamicAgentProxy:
                 final_tools.append(dt)
 
     def _is_pydantic_model(self, cls: Type) -> bool:
-        try:
-            return issubclass(cls, BaseModel)
-        except TypeError:
-            return False
+        return isinstance(cls, type) and issubclass(cls, BaseModel)

@@ -168,20 +168,6 @@ class TestAgentConfigService:
         assert result.temperature == 0.9
         assert result.system_prompt == "Original"
 
-    def test_reset_agent_config(self, service, local_registry):
-        config = AgentConfig(name="agent", system_prompt="Original", temperature=0.5)
-
-        class Protocol:
-            pass
-
-        local_registry.register("agent", Protocol, config)
-
-        service.update_agent_config("agent", temperature=0.9)
-        service.reset_agent_config("agent")
-
-        result = service.get_config("agent")
-        assert result.temperature == 0.5
-
     def test_runtime_override_creates_config_if_no_base(self, service):
         service.update_agent_config("new_agent", system_prompt="Runtime created")
 

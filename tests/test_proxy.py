@@ -5,7 +5,7 @@ import pytest
 from pico_agent.config import AgentCapability, AgentConfig, AgentType
 from pico_agent.exceptions import AgentDisabledError
 from pico_agent.interfaces import LLMFactory
-from pico_agent.proxy import DynamicAgentProxy, TracedAgentProxy
+from pico_agent.proxy import DynamicAgentProxy
 from pico_agent.registry import AgentConfigService, LocalAgentRegistry, ToolRegistry
 from pico_agent.router import ModelRouter
 from pico_agent.tracing import TraceService
@@ -21,75 +21,6 @@ def create_mock_container(with_tracer=False):
         return container, tracer
     container.get.return_value = None
     return container, None
-
-
-class TestTracedAgentProxy:
-    def test_execute_agent_calls_llm_invoke(
-        self, mock_llm_factory, mock_llm, config_service, tool_registry, model_router
-    ):
-        proxy = TracedAgentProxy(
-            config_service=config_service,
-            tool_registry=tool_registry,
-            llm_factory=mock_llm_factory,
-            model_router=model_router,
-        )
-        result = proxy.execute_agent("test_agent", "Hello")
-        mock_llm.invoke.assert_called_once()
-        assert result == "mocked response"
-
-    def test_execute_disabled_agent_raises_error(
-        self, mock_llm_factory, config_service, tool_registry, model_router, local_registry, disabled_agent_config
-    ):
-        local_registry.register(disabled_agent_config.name, type("DisabledProtocol", (), {}), disabled_agent_config)
-        proxy = TracedAgentProxy(
-            config_service=config_service,
-            tool_registry=tool_registry,
-            llm_factory=mock_llm_factory,
-            model_router=model_router,
-        )
-        with pytest.raises(AgentDisabledError):
-            proxy.execute_agent("disabled_agent", "test input")
-
-    def test_execute_react_agent_uses_agent_loop(
-        self,
-        mock_llm_factory,
-        mock_llm,
-        tool_registry,
-        model_router,
-        mock_central_client,
-        local_registry,
-        sample_react_config,
-    ):
-        local_registry.register(sample_react_config.name, type("ReactProtocol", (), {}), sample_react_config)
-        config_service = AgentConfigService(mock_central_client, local_registry)
-
-        proxy = TracedAgentProxy(
-            config_service=config_service,
-            tool_registry=tool_registry,
-            llm_factory=mock_llm_factory,
-            model_router=model_router,
-        )
-        result = proxy.execute_agent("react_agent", "Process this")
-        mock_llm.invoke_agent_loop.assert_called_once()
-        assert result == "agent loop result"
-
-    def test_resolves_tools_from_registry(self, mock_llm_factory, config_service, model_router):
-        tool_registry = ToolRegistry()
-        mock_tool = MagicMock()
-        mock_tool.name = "tool1"
-        tool_registry.register("tool1", mock_tool)
-
-        proxy = TracedAgentProxy(
-            config_service=config_service,
-            tool_registry=tool_registry,
-            llm_factory=mock_llm_factory,
-            model_router=model_router,
-        )
-        proxy.execute_agent("test_agent", "test")
-
-        call_args = mock_llm_factory.create.return_value.invoke.call_args
-        tools_passed = call_args[0][1]
-        assert mock_tool in tools_passed
 
 
 class TestDynamicAgentProxy:

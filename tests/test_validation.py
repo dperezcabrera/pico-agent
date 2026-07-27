@@ -28,27 +28,16 @@ class TestValidationReport:
         report = ValidationReport(valid=True, issues=[])
         assert report.valid is True
         assert report.issues == []
-        assert report.has_errors is False
 
     def test_report_with_warnings_only(self):
         issues = [ValidationIssue("field1", "warning message", Severity.WARNING)]
         report = ValidationReport(valid=True, issues=issues)
         assert report.valid is True
-        assert report.has_errors is False
 
     def test_report_with_errors(self):
         issues = [ValidationIssue("field1", "error message", Severity.ERROR)]
         report = ValidationReport(valid=False, issues=issues)
         assert report.valid is False
-        assert report.has_errors is True
-
-    def test_has_errors_with_mixed_issues(self):
-        issues = [
-            ValidationIssue("field1", "warning", Severity.WARNING),
-            ValidationIssue("field2", "error", Severity.ERROR),
-        ]
-        report = ValidationReport(valid=False, issues=issues)
-        assert report.has_errors is True
 
 
 class TestAgentValidator:
@@ -59,7 +48,6 @@ class TestAgentValidator:
     def test_validate_valid_config(self, validator, sample_agent_config):
         report = validator.validate(sample_agent_config)
         assert report.valid is True
-        assert not report.has_errors
 
     def test_validate_empty_name(self, validator):
         config = AgentConfig(name="")

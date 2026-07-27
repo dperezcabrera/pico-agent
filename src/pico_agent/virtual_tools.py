@@ -88,24 +88,3 @@ class VirtualToolManager:
         self.tool_registry.register(name, tool_instance)
 
         return tool_instance
-
-    def create_proto_tool(self, name: str, description: str, handler: Callable[[List[Dict[str, Any]]], str]):
-        """Create a tool that accepts a list of dictionaries as its payload.
-
-        Convenience wrapper around ``create_tool()`` for handlers that process
-        structured batch data.
-
-        Args:
-            name: Unique tool identifier.
-            description: Human-readable description for the LLM.
-            handler: A callable that receives ``List[Dict[str, Any]]`` and
-                returns a string result.
-
-        Returns:
-            The created ``DynamicTool`` instance.
-        """
-
-        def wrapper(payload: List[Dict[str, Any]]) -> str:
-            return handler(payload)
-
-        return self.create_tool(name, description, wrapper)

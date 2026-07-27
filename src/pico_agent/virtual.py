@@ -22,7 +22,7 @@ from .messages import build_messages
 from .registry import AgentConfigService, ToolRegistry
 from .router import ModelRouter
 from .scheduler import PlatformScheduler
-from .tools import ToolWrapper
+from .tools import ToolWrapper, resolve_tool_instance
 
 T = TypeVar("T")
 
@@ -319,12 +319,7 @@ class VirtualAgentRunner:
     def _resolve_tools(self) -> List[Any]:
         final_tools = []
         for tool_name in self.config.tools:
-            tool_instance = None
-            if self.container.has(tool_name):
-                tool_instance = self.container.get(tool_name)
-            elif self.tool_registry.get_tool(tool_name):
-                tool_ref = self.tool_registry.get_tool(tool_name)
-                tool_instance = tool_ref() if isinstance(tool_ref, type) else tool_ref
+            tool_instance = resolve_tool_instance(self.container, self.tool_registry, tool_name)
 
             if tool_instance:
                 if hasattr(tool_instance, "args_schema") and hasattr(tool_instance, "name"):

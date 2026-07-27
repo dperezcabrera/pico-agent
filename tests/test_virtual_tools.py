@@ -22,8 +22,8 @@ def test_proto_tool_creation_and_use():
     def my_logic(payload: List[Dict[str, Any]]) -> str:
         return ", ".join([str(item.get("val")) for item in payload])
 
-    tool_manager.create_proto_tool(
-        name="data_processor", description="Processes a list of dictionaries", handler=my_logic
+    tool_manager.create_tool(
+        name="data_processor", description="Processes a list of dictionaries", func=my_logic
     )
 
     agent_manager = container.get(VirtualAgentManager)

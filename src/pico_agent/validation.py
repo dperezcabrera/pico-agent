@@ -50,11 +50,6 @@ class ValidationReport:
     valid: bool
     issues: List[ValidationIssue] = field(default_factory=list)
 
-    @property
-    def has_errors(self) -> bool:
-        """Return ``True`` if any issue has ``Severity.ERROR``."""
-        return any(i.severity == Severity.ERROR for i in self.issues)
-
 
 class AgentValidator:
     """Validates ``AgentConfig`` instances for correctness.
