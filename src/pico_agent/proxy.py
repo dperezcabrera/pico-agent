@@ -119,9 +119,7 @@ class DynamicAgentProxy:
                 if inspect.iscoroutinefunction(method_ref):
 
                     async def async_inner():
-                        result = await asyncio.to_thread(
-                            self._execute, input_context, return_type, runtime_model
-                        )
+                        result = await asyncio.to_thread(self._execute, input_context, return_type, runtime_model)
                         if self.tracer and run_id:
                             self.tracer.end_run(run_id, outputs=result)
                         return result
