@@ -11,8 +11,7 @@ skipped automatically.
 import inspect
 from typing import Any, Set
 
-from pico_ioc import component, configure
-from pico_ioc.factory import DeferredProvider, ProviderMetadata
+from pico_ioc import DeferredProvider, ProviderMetadata, component, configure
 
 from .decorators import AGENT_META_KEY, IS_AGENT_INTERFACE, TOOL_META_KEY
 from .logging import get_logger
