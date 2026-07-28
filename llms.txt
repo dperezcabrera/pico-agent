@@ -65,5 +65,4 @@ class TranslatorAgent(Protocol):
 - docs/getting-started.md
 - docs/how-to/ (3 pages)
 - docs/reference/ (1 pages)
-- docs/releases/ (1 pages)
 - docs/skills.md
