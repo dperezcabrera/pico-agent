@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.h
 
 ---
 
+## [0.2.1] - 2026-07-29
+
+Final release. pico-agent is deprecated and no longer maintained.
+
+### Fixed
+
+- Import the scanner ABI (`DeferredProvider`, `ProviderMetadata`) from the top-level `pico_ioc` facade. The previous import path (`pico_ioc.factory`) was removed in pico-ioc 2.4.0, which made pico-agent 0.2.0 fail to import alongside it.
+
+### Deprecated
+
+- The whole package: no further releases after 0.2.1. The rest of the pico ecosystem is unaffected.
+
 ## [0.2.0] - 2026-02-06
 
 ### Added

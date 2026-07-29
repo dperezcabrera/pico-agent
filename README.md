@@ -1,5 +1,11 @@
 # pico-agent
 
+> **DEPRECATED.** This package is no longer maintained and receives no further
+> releases. Version 0.2.1 is the final release; it fixes compatibility with
+> pico-ioc >= 2.4.0 so existing installs keep working. The rest of the
+> [pico ecosystem](https://github.com/dperezcabrera/pico-ioc) is unaffected
+> and actively maintained.
+
 [![PyPI](https://img.shields.io/pypi/v/pico-agent.svg)](https://pypi.org/project/pico-agent/)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/dperezcabrera/pico-agent)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)

@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "pico-agent"
 dynamic = ["version"]
 authors = [{ name = "David Perez Cabrera", email = "dperezcabrera@gmail.com" }]
-description = "A pico agent framework with LangChain integration."
+description = "DEPRECATED - unmaintained. Multi-agent framework for pico-ioc; 0.2.1 is the final release."
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
@@ -21,7 +21,7 @@ keywords = [
     "ai"
 ]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 7 - Inactive",
     "Framework :: AsyncIO",
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Programming Language :: Python :: 3",
